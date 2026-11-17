@@ -42,6 +42,18 @@ def build_registry() -> dict[str, TranslationProvider]:
 registry = build_registry()
 router = FailoverRouter(priority=["gemini", "azure", "mock"])
 METER_SECONDS = 60
+# segundos de fala ainda NÃO gravados no banco, por evento: event_id -> (instante do último evento, pendente)
+_speech: dict[str, tuple[float, float]] = {}
+
+
+def take_speech(event_id) -> float:
+    """Entrega (e zera) os segundos de fala acumulados do evento; o relógio grava em Event.active_seconds."""
+    k = str(event_id)
+    last, pend = _speech.get(k, (0.0, 0.0))
+    _speech[k] = (last, 0.0)
+    return pend
+
+
 ACTIVE_HOLD_S = 3.0   # pausa de até 3 s entre eventos de tradução ainda conta como "traduzindo" (respiros dentro da frase)
 
 
@@ -169,6 +181,11 @@ class ChannelManager:
         gap = now - ch.last_event_t if ch.last_event_t else ACTIVE_HOLD_S
         ch.active_s += min(gap, ACTIVE_HOLD_S)
         ch.last_event_t = now
+        # Relógio de FALA do EVENTO (união de todos os idiomas): as horas do plano contam só o tempo em que há tradução.
+        if ch.event_id is not None:
+            k = str(ch.event_id)
+            last, pend = _speech.get(k, (0.0, 0.0))
+            _speech[k] = (now, pend + min(now - last if last else ACTIVE_HOLD_S, ACTIVE_HOLD_S))
 
     def _meter(self, ch: _Chan) -> None:
         minutes = ch.active_s / 60          # só tempo COM tradução (silêncio não é cobrado)

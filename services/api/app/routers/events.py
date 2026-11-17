@@ -23,7 +23,7 @@ from ..security import create_ingest_token, gen_join_code, hash_password
 from ..services.billing import QuotaError, reserve_event_start
 from ..services import original_asr
 from ..services.channels import manager
-from ..services.event_clock import charge, charged_minutes, elapsed_minutes, event_entitlement, event_limits
+from ..services.event_clock import charge, charged_minutes, elapsed_minutes, event_entitlement, event_limits, flush_speech, speech_minutes
 from ..services.plan_schema import is_unlimited, limit as plan_limit, max_event_minutes
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -195,8 +195,9 @@ def event_usage(event_id: UUID, ctx: Ctx = Depends(require_member), db: Session 
     rem = ent.event_minutes_remaining if ent else None
     cap = max_event_minutes(lim)
     el = elapsed_minutes(ev)
+    flush_speech(db, ev)
     return {"status": ev.status.value, "started_at": iso(ev.started_at) if ev.started_at else None,
-            "elapsed_minutes": round(el, 1), "charged_minutes": charged_minutes(db, ev),
+            "elapsed_minutes": round(el, 1), "speech_minutes": round(speech_minutes(ev), 1), "charged_minutes": charged_minutes(db, ev),
             "plan_minutes_remaining": None if rem is None or is_unlimited(rem) else int(rem),
             "event_cap_minutes": cap, "event_minutes_left": None if cap is None else max(0, round(cap - el, 1)),
             "listener_concurrency": plan_limit(lim, "listener_concurrency", None),

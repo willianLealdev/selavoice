@@ -79,3 +79,38 @@ def test_private_event_not_listed_but_public_is(client, tenant_a):
     ev = make_event(client, tenant_a, "Publico2")
     assert client.get(f"/public/join/{ev['join_code']}").json()["private"] is False              # público segue sem senha
     assert client.post(f"/public/join/{ev['join_code']}/token").status_code == 200
+
+
+# ---------------------------------------------------------------- horas só com fala
+def test_event_hours_count_only_speech_not_silence(client, superadmin, monkeypatch):
+    import time
+    import uuid
+    from app.models import Event
+    from app.services import channels as C
+    from app.services.event_clock import tick
+    import asyncio
+    _no_trial(client, superadmin)
+    h, _ = register(client, "So Fala")
+    tid = _tenant_id(client, superadmin, h)
+    with SessionLocal() as db:   # plano com 60 min de transmissão
+        pass
+    client.post(f"/admin/tenants/{tid}/grant-plan", json={"unlimited": True, "reason": "teste de horas"}, headers=superadmin)
+    ev = make_event(client, h)
+    client.post(f"/events/{ev['id']}/start", headers=h)
+    with SessionLocal() as db:   # evento "ao vivo" há 30 min, mas SEM nenhuma fala
+        e = db.get(Event, uuid.UUID(ev["id"]))
+        from datetime import datetime, timedelta, timezone
+        e.started_at = datetime.now(timezone.utc) - timedelta(minutes=30)
+        db.commit()
+    asyncio.run(tick())
+    u = client.get(f"/events/{ev['id']}/usage", headers=h).json()
+    assert u["charged_minutes"] == 0 and u["elapsed_minutes"] >= 29            # 30 min de relógio, 0 min de fala
+    ch = C._Chan(tenant_id=None, event_id=uuid.UUID(ev["id"]), session_id="s", lang="en", source_lang="pt")
+    now = [100.0]
+    monkeypatch.setattr(time, "monotonic", lambda: now[0])
+    C.manager._touch_active(ch)
+    for _ in range(90):                                                         # 90 s de tradução contínua
+        now[0] += 1.0
+        C.manager._touch_active(ch)
+    asyncio.run(tick())
+    assert client.get(f"/events/{ev['id']}/usage", headers=h).json()["charged_minutes"] == 1

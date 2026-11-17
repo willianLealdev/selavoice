@@ -11,7 +11,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import (JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer,
+from sqlalchemy import (JSON, Float, BigInteger, Boolean, DateTime, Enum, ForeignKey, Index, Integer,
                         Numeric, String, Text, UniqueConstraint, Uuid)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -173,6 +173,8 @@ class Event(_Mixin, Base):
     entitlement_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Segundos COM FALA/TRADUÇÃO (as horas do plano contam só isto; silêncio e pausas não gastam horas).
+    active_seconds: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     sessions: Mapped[list["EventSession"]] = relationship(back_populates="event", cascade="all, delete-orphan")
 
 

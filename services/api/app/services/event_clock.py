@@ -22,7 +22,7 @@ from ..audit import audit
 from ..db import SessionLocal
 from ..models import Entitlement, Event, EventStatus, UsageEvent
 from . import original_asr
-from .channels import manager
+from .channels import manager, take_speech
 from .plan_schema import limit, max_event_minutes
 from .transcripts import hub
 
@@ -57,6 +57,19 @@ def elapsed_minutes(ev: Event, now: datetime | None = None) -> float:
     return max(0.0, (end - _aware(ev.started_at)).total_seconds() / 60)
 
 
+def flush_speech(db: Session, ev: Event) -> None:
+    """Passa para o banco os segundos de fala acumulados na memória (idempotente: o que já passou não volta)."""
+    s = take_speech(ev.id)
+    if s > 0:
+        ev.active_seconds = float(ev.active_seconds or 0) + s
+        db.commit()
+
+
+def speech_minutes(ev: Event) -> float:
+    """Minutos COM FALA: é isto que gasta as horas do plano (silêncio não conta)."""
+    return float(ev.active_seconds or 0) / 60
+
+
 def charged_minutes(db: Session, ev: Event) -> int:
     return int(db.scalar(select(func.coalesce(func.sum(UsageEvent.quantity), 0)).where(
         UsageEvent.event_id == ev.id, UsageEvent.kind == "event_minute")) or 0)
@@ -66,7 +79,8 @@ def charge(db: Session, ev: Event, now: datetime | None = None, *, final: bool =
     """Lança os minutos de transmissão ainda não cobrados. Retorna quantos minutos foram lançados agora."""
     if not ev.started_at:
         return 0
-    el = elapsed_minutes(ev, now)
+    flush_speech(db, ev)
+    el = speech_minutes(ev)   # horas do plano = só tempo com fala
     due = math.ceil(el) if final else math.floor(el)
     done = charged_minutes(db, ev)
     if due <= done:
@@ -91,7 +105,7 @@ def limit_reached(db: Session, ev: Event, now: datetime | None = None) -> str | 
     if ent is not None and ent.event_minutes_remaining is not None and ent.event_minutes_remaining <= 0:
         return "As horas de transmissão do plano acabaram."
     cap = max_event_minutes(event_limits(db, ev))
-    if cap is not None and elapsed_minutes(ev, now) >= cap:
+    if cap is not None and speech_minutes(ev) >= cap:
         return "O limite de duração deste evento foi atingido."
     return None
 

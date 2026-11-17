@@ -30,6 +30,7 @@ def backdate_start(event_id: str, minutes: float):
     with SessionLocal() as db:
         ev = db.get(Event, uuid.UUID(event_id))
         ev.started_at = datetime.now(timezone.utc) - timedelta(minutes=minutes)
+        ev.active_seconds = minutes * 60   # horas do plano contam só o tempo com fala: simula que houve fala todo o período
         db.commit()
 
 
