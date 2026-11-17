@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, money } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { countsHours, planLines } from "@/lib/plans";
+import { isNativeApp } from "@/lib/native";
 
 export default function Billing() {
   const t = useT();
@@ -11,6 +12,8 @@ export default function Billing() {
   const [packs, setPacks] = useState<any[]>([]);
   const [usage, setUsage] = useState<any>(null);
   const [msg, setMsg] = useState("");
+  const [native, setNative] = useState(false);
+  useEffect(() => setNative(isNativeApp()), []);
   const load = () => { api("/plans").then(setPlans); api("/topups").then(setPacks).catch(() => {}); api("/usage").then(setUsage).catch(() => {}); };
   useEffect(load, []);
 
@@ -38,7 +41,8 @@ export default function Billing() {
           <div className="card"><b>{Math.round(usage.language_minutes_used)}</b>{t("minutos-idioma usados")}</div>
         </div>
       )}
-      {packs.length > 0 && (
+      {native && <div className="ok">{t("Para contratar ou recarregar, acesse selavoice.com no navegador. Aqui você acompanha o seu uso.")}</div>}
+      {!native && packs.length > 0 && (
         <>
           <h2>{t("Recarregar")}</h2>
           <p className="fine">{low ? t("Seu saldo de horas está acabando. Recarregue sem trocar de plano.") : t("Acabou o saldo antes do fim do período? Compre horas extras, sem trocar de plano.")}</p>
@@ -54,8 +58,8 @@ export default function Billing() {
           </div>
         </>
       )}
-      <h2>{t("Contratar")}</h2>
-      <div className="grid-3">
+      {!native && <h2>{t("Contratar")}</h2>}
+      {!native && <div className="grid-3">
         {plans.map((p) => (
           <div className="card price" key={p.plan_version_id}>
             <h3>{t(p.name)}</h3>
@@ -65,7 +69,7 @@ export default function Billing() {
             <button className="btn btn-primary" onClick={() => buy(p.plan_version_id)}>{t("Contratar")}</button>
           </div>
         ))}
-      </div>
+      </div>}
     </>
   );
 }

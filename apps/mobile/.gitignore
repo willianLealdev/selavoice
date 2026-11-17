@@ -1,0 +1,10 @@
+node_modules/
+# Pastas nativas são geradas no build (cap add); não ficam no repositório.
+android/
+ios/
+# NUNCA colocar chaves de assinatura aqui
+*.keystore
+*.jks
+*.p12
+*.p8
+*.mobileprovision

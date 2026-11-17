@@ -241,6 +241,49 @@ def mfa_verify(body: MfaVerifyIn, response: Response, user: User = Depends(curre
 
 
 # ---------------- /me ----------------
+# ---------------- Excluir a própria conta ----------------
+# EXIGÊNCIA das lojas: Apple (5.1.1) e Google Play pedem que quem cria conta no app consiga excluí-la no próprio app.
+class DeleteAccountIn(BaseModel):
+    password: str = Field(min_length=1, max_length=200)   # confirma que é o dono da conta (e não alguém com a tela aberta)
+
+
+@router.post("/me/delete", dependencies=[Depends(_auth_limit)])
+def delete_account(body: DeleteAccountIn, request: Request, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Anonimiza o usuário (e-mail, nome, senha, MFA somem) e remove seus acessos. Se ele era o ÚNICO membro de uma organização,
+    a organização também é encerrada (sai do ar e perde os saldos). Se é o único ADMIN de uma organização com outras pessoas,
+    recusamos: ele precisa passar a administração antes (senão a organização ficaria sem dono)."""
+    if user.is_super_admin:
+        raise HTTPException(403, "A conta de Super Admin não pode ser excluída por aqui.")
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(403, "Senha incorreta.")
+    from ..models import Entitlement, Event, EventStatus
+    mems = db.scalars(select(Membership).where(Membership.user_id == user.id)).all()
+    solo: list[Tenant] = []
+    for m in mems:
+        others = db.scalars(select(Membership).where(Membership.tenant_id == m.tenant_id, Membership.user_id != user.id)).all()
+        if not others:
+            if db.scalar(select(Event.id).where(Event.tenant_id == m.tenant_id, Event.status == EventStatus.LIVE)):
+                raise HTTPException(409, "Encerre os eventos ao vivo antes de excluir a conta.")
+            solo.append(db.get(Tenant, m.tenant_id))
+        elif m.role == Role.TENANT_ADMIN and not any(o.role == Role.TENANT_ADMIN for o in others):
+            raise HTTPException(409, "Você é o único administrador. Passe a administração para outra pessoa antes de excluir a conta.")
+    for t in solo:
+        t.status = "deleted"                                   # some do público (as rotas públicas exigem status "active")
+        for en in db.scalars(select(Entitlement).where(Entitlement.tenant_id == t.id)):
+            en.active = False
+    for m in mems:
+        db.delete(m)
+    for rt in db.scalars(select(RefreshToken).where(RefreshToken.user_id == user.id)):
+        rt.revoked = True                                      # derruba todas as sessões abertas
+    user.email = f"deleted-{uuid.uuid4().hex}@deleted.invalid"
+    user.name, user.password_hash, user.status = "", None, "deleted"
+    user.mfa_secret_enc, user.mfa_enabled = None, False
+    db.commit()
+    audit(db, action="auth.account_deleted", actor_id=user.id, ip=client_ip(request),
+          meta={"orgs_closed": [str(t.id) for t in solo]})      # o e-mail antigo NÃO vai para o log (privacidade)
+    return {"ok": True}
+
+
 @router.get("/me")
 def me(user: User = Depends(current_user), claims: dict = Depends(current_claims),
        db: Session = Depends(get_db)):

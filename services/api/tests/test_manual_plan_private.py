@@ -179,3 +179,19 @@ def test_delete_event_hides_it_everywhere(client, tenant_a, tenant_b):
     assert ev["id"] not in [e["id"] for e in client.get("/events", headers=tenant_a).json()]
     assert client.get(f"/events/{ev['id']}", headers=tenant_a).status_code == 404
     assert client.get(f"/public/join/{code}").status_code == 404
+
+
+# ---------------------------------------------------------------- excluir a própria conta (exigência das lojas)
+def test_delete_own_account(client, superadmin):
+    from conftest import PW
+    h, email = register(client, "Conta Solo")
+    slug = client.get("/organizations/me", headers=h).json()["slug"]
+    assert client.post("/auth/me/delete", json={"password": "errada"}, headers=h).status_code == 403
+    assert client.get(f"/public/orgs/{slug}").status_code == 200
+    assert client.post("/auth/me/delete", json={"password": PW}, headers=h).status_code == 200
+    assert client.get(f"/public/orgs/{slug}").status_code == 404                      # a organização solo saiu do ar
+    assert client.post("/auth/login", json={"email": email, "password": PW}).status_code in (401, 403)   # não entra mais
+
+
+def test_super_admin_cannot_delete_via_api(client, superadmin):
+    assert client.post("/auth/me/delete", json={"password": "x"}, headers=superadmin).status_code == 403

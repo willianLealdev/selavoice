@@ -29,3 +29,7 @@ Nada abaixo foi inventado ou simulado como "funcionando". Cada item diz o que fo
 
 - **Filtro de ruído (2026-11-17)**: medido só com vozes sintéticas do Windows (palestrante + conversa de fundo). Após o palestrante estabelecer o volume (ou após calibrar), fundo 16 dB abaixo (Forte) / 20 dB abaixo (Normal) foi 100% bloqueado; fundo a -12 dB ou mais forte passa. NÃO testado com sala real, plateia reagindo ("glória"), voz sobreposta nem "línguas estranhas" reais. Detecção de "ininteligível" (Deepgram) é heurística (limiar 0,5) a ajustar com áudio real.
 
+
+## Lojas de apps (2026-11-17)
+- BLOCKED_EXTERNAL: compilar/assinar Android (.aab) e iOS (.ipa) exige Codemagic + chaves do dono (keystore, App Store Connect API); `codemagic.yaml` não foi executado. Windows: pacote MSIX via PWABuilder com identidade do Partner Center.
+- Pendências do dono: identificador do app (Bundle ID/pacote) confirmado, e-mail de suporte, capturas de tela, revisão jurídica da política de privacidade, conta de teste com plano ativo.

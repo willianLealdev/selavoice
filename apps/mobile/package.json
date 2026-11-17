@@ -1,0 +1,23 @@
+{
+  "name": "selavoice-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Casco nativo (Android/iOS) do SelaVoice: abre https://selavoice.com/app (tela de entrar, nunca a landing). Quase tudo muda pelo site/painel, sem nova versão na loja.",
+  "scripts": {
+    "prepare:android": "cap add android && node scripts/patch-native.mjs android && capacitor-assets generate --android --iconBackgroundColor #ffffff --splashBackgroundColor #ffffff && cap sync android",
+    "prepare:ios": "cap add ios && node scripts/patch-native.mjs ios && capacitor-assets generate --ios --iconBackgroundColor #ffffff --splashBackgroundColor #ffffff && cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/app": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "@capacitor/splash-screen": "^7.0.0",
+    "@capacitor/status-bar": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.0.0",
+    "typescript": "^5.6.0"
+  }
+}

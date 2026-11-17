@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import Icon from "@/components/Icon";
 import OrgLogo from "@/components/OrgLogo";
-import { api } from "@/lib/api";
+import { api, setToken } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
 export default function Profile() {
@@ -15,6 +15,7 @@ export default function Profile() {
   const [org, setOrg] = useState<any>(null); const [qr, setQr] = useState(""); const [msg, setMsg] = useState<{ ok: boolean; m: string } | null>(null);
   const [name, setName] = useState(""); const [color, setColor] = useState("#0B63CE"); const [listed, setListed] = useState(true); const [hist, setHist] = useState(true);
   const [c, setC] = useState<Record<string, string>>({});
+  const [delPw, setDelPw] = useState(""); const [delErr, setDelErr] = useState("");
   const [au, setAu] = useState<{ filter: string; noise_suppression: boolean; only_event_language: boolean }>({ filter: "normal", noise_suppression: true, only_event_language: true }); const [busy, setBusy] = useState(false);
   useEffect(() => {
     api("/organizations/me").then(async (o) => {
@@ -103,6 +104,20 @@ export default function Profile() {
           <p className="fine">{t("Imprima e exiba no local: o público escaneia e vê os eventos ao vivo, sem criar conta.")}</p>
           <a className="btn btn-ghost btn-sm" href={qr} download={`qr-${org.slug}.png`}>{t("Baixar QR")}</a>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <h3>{t("Excluir minha conta")}</h3>
+        <p className="fine">{t("Apaga seus dados pessoais e remove seu acesso. Se você é a única pessoa da organização, ela também é encerrada e sai do ar. Isso não pode ser desfeito.")}</p>
+        <form className="row" style={{ alignItems: "flex-end" }} onSubmit={async (e) => {
+          e.preventDefault();
+          if (!confirm(t("Excluir sua conta de verdade? Isso não pode ser desfeito."))) return;
+          try { await api("/auth/me/delete", { method: "POST", json: { password: delPw } }); setToken(null); location.href = "/"; } catch (x: any) { setDelErr(x.message); }
+        }}>
+          <div><label>{t("Digite sua senha para confirmar")}</label><input type="password" required value={delPw} onChange={(e) => setDelPw(e.target.value)} autoComplete="current-password" /></div>
+          <button className="btn btn-danger">{t("Excluir minha conta")}</button>
+        </form>
+        {delErr && <div className="err" style={{ marginTop: 10 }}>{t(delErr)}</div>}
       </div>
     </>
   );
