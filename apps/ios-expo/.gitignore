@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# credenciais de assinatura: NUNCA no GitHub
+credentials.json
