@@ -280,7 +280,11 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
       {langs.length > 0 && !lang && (
         <div className="modal-bg" role="dialog" aria-modal="true" aria-label={t("Em qual idioma você quer ouvir?")}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-h"><h3>{t("Em qual idioma você quer ouvir?")}</h3></div>
+            <div className="modal-h">
+              {/* O aviso cobre a tela inteira (inclusive o Voltar do topo): por isso o Voltar também fica aqui dentro */}
+              <BackButton fallback={info.organization_slug ? `/o/${info.organization_slug}` : "/buscar"} />
+              <h3>{t("Em qual idioma você quer ouvir?")}</h3>
+            </div>
             <p className="fine" style={{ margin: "0 16px" }}>{t("Vamos lembrar da sua escolha neste aparelho. Você pode trocar quando quiser no botão de idioma, no topo.")}</p>
             <div style={{ padding: "12px 12px 4px" }}>
               <input value={askLang} onChange={(e) => setAskLang(e.target.value)} placeholder={t("Buscar idioma…")} aria-label={t("Buscar idioma…")} autoFocus />
