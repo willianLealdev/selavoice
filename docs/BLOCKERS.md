@@ -27,3 +27,5 @@ Nada abaixo foi inventado ou simulado como "funcionando". Cada item diz o que fo
 - **Transcrição do original (2026-11-17)**: Deepgram AO VIVO validado em teste curto real (PT, 3 frases corretas, 99,9% de confiança no teste prévio) e Gemini como reserva (sem vírgulas; qualidade menor). DeepSeek (esboço do documento) validado em chamada real. Pendente: voz humana/sotaques, eventos longos, custo real do Deepgram.
 - **Chaves NÃO salvas até agora**: Azure (chave+região), Resend (chave+remetente) e Stripe (chave secreta; modo ainda `fake`). Sem elas esses 3 não foram testados.
 
+- **Filtro de ruído (2026-11-17)**: medido só com vozes sintéticas do Windows (palestrante + conversa de fundo). Após o palestrante estabelecer o volume (ou após calibrar), fundo 16 dB abaixo (Forte) / 20 dB abaixo (Normal) foi 100% bloqueado; fundo a -12 dB ou mais forte passa. NÃO testado com sala real, plateia reagindo ("glória"), voz sobreposta nem "línguas estranhas" reais. Detecção de "ininteligível" (Deepgram) é heurística (limiar 0,5) a ajustar com áudio real.
+

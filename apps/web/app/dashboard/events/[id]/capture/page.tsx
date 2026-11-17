@@ -7,7 +7,9 @@
  * Como funciona: pede permissão do microfone, converte para PCM 16-bit mono 16 kHz em quadros de 20 ms e envia por
  * WebSocket seguro (/sessions/{id}/ingest) usando um token efêmero. Reconecta sozinho se a rede cair.
  * Requer HTTPS em produção (navegadores só liberam microfone em HTTPS ou localhost).
- * Desligamos eco/ruído/ganho automático: para fala ao vivo vinda de mesa, processar o sinal piora a tradução.
+ * RUÍDO: com microfone de sala/celular ligamos a supressão de ruído, eco e ganho do navegador (padrão da organização, ajustável aqui);
+ * com mesa de som (linha limpa) deixe desligado. Além disso o SERVIDOR filtra tudo que não é a voz mais alta (ver audio_gate.py)
+ * e o botão "Calibrar" ensina ao sistema o volume do palestrante antes do evento.
  */
 import Link from "next/link";
 import { use, useEffect, useRef, useState } from "react";
@@ -28,9 +30,13 @@ export default function Capture({ params }: { params: Promise<{ id: string }> })
   const [net, setNet] = useState("parado");
   const [diag, setDiag] = useState<any>(null);
   const [err, setErr] = useState("");
+  const [ns, setNs] = useState(true);              // supressão de ruído/eco/ganho do navegador
+  const [cal, setCal] = useState(0);              // segundos restantes da calibração
   const ref = useRef<{ stop: () => void } | null>(null);
 
-  useEffect(() => { api(`/events/${id}`).then(setEv).catch((e) => setErr(e.message)); return () => ref.current?.stop(); }, [id]);
+  useEffect(() => { api(`/events/${id}`).then(setEv).catch((e) => setErr(e.message)); api("/organizations/me").then((o: any) => setNs(o.audio?.noise_suppression !== false)).catch(() => {}); return () => ref.current?.stop(); }, [id]);
+  useEffect(() => { if (cal <= 0) return; const h = setTimeout(() => setCal(cal - 1), 1000); return () => clearTimeout(h); }, [cal]);
+  async function calibrate() { try { await api(`/sessions/${sid}/audio-calibrate`, { method: "POST" }); setCal(5); setErr(""); } catch (e: any) { setErr(e.message); } }
   const sid = ev?.sessions?.[0]?.id;
 
   async function listDevices() {
@@ -46,7 +52,7 @@ export default function Capture({ params }: { params: Promise<{ id: string }> })
     if (!navigator.mediaDevices?.getUserMedia) return setErr(t("Este navegador não permite captura de áudio (precisa de HTTPS)."));
     let stopped = false, ws: WebSocket | null = null, retry = 0, wake: any = null;
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      audio: { deviceId: deviceId ? { exact: deviceId } : undefined, channelCount: 1, echoCancellation: ns, noiseSuppression: ns, autoGainControl: ns },
     }).catch((e) => { setErr(t("Não consegui abrir a entrada de áudio:") + " " + e.message); return null; });
     if (!stream) return;
     const ctx = new AudioContext();
@@ -119,6 +125,8 @@ export default function Capture({ params }: { params: Promise<{ id: string }> })
           </select>
           <button className="btn btn-ghost btn-sm" onClick={listDevices} disabled={running}>{t("Listar entradas")}</button>
         </div>
+        <label className="pf-check" style={{ marginTop: 14 }}><input type="checkbox" checked={ns} disabled={running} onChange={(e) => setNs(e.target.checked)} /> {t("Reduzir ruído do ambiente (microfone de sala ou celular)")}</label>
+        <p className="fine" style={{ marginTop: -6 }}>{t("Desligue se o áudio vem limpo de uma mesa de som.")}</p>
         <div style={{ margin: "18px 0", height: 16, background: "#e1e8f5", borderRadius: 8, overflow: "hidden" }} aria-label={t("Nível do áudio")}>
           <div style={{ width: `${level * 100}%`, height: "100%", background: level > 0.9 ? "var(--bad)" : "var(--ok)", transition: "width .08s" }} />
         </div>
@@ -127,6 +135,15 @@ export default function Capture({ params }: { params: Promise<{ id: string }> })
                     : <button className="btn btn-danger" onClick={() => ref.current?.stop()}>{t("Parar")}</button>}
           <span className="fine">{t("Conexão")}: {t(net)}</span>
         </div>
+        {running && (
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn btn-ghost btn-sm" disabled={cal > 0} onClick={calibrate}><Icon name="mic" small /> {cal > 0 ? `${t("Fale normalmente")}… ${cal}s` : t("Calibrar voz do palestrante")}</button>
+            <span className="fine">{t("Antes de começar: o palestrante fala por 5 segundos e o sistema aprende o volume dele, para ignorar conversas ao redor.")}</span>
+          </div>
+        )}
+        {diag?.filter && (
+          <p className="fine">{t("Filtro de voz")}: <b>{t(({ off: "desligado", normal: "normal", strong: "forte" } as Record<string, string>)[diag.filter.mode] ?? diag.filter.mode)}</b> · {diag.filter.dropped_pct}% {t("do áudio descartado (ruído e silêncio)")} · {diag.filter.calibrated ? t("calibrado") : t("aprendendo a voz")}</p>
+        )}
         {diag?.receiving !== undefined && (
           <p className="fine">{t("Servidor")}: {diag.receiving ? `${t("recebendo áudio")} (${diag.avg_kbps} kbps)` : t("aguardando áudio")}</p>
         )}

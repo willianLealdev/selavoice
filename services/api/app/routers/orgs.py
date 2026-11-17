@@ -15,6 +15,7 @@ from ..models import Invitation, Membership, Role, Tenant, User
 from ..services.email import send_invite
 from ..services.event_clock import tenant_limits
 from ..services.plan_schema import limit as plan_limit
+from ..services.audio_gate import clean_audio, get_audio
 from ..services.contact import ContactError, clean_contact
 from ..services.logo import LogoError, logo_path, process_logo
 from ..security import hash_password, hash_token, validate_password_strength
@@ -29,7 +30,7 @@ def my_org(ctx: Ctx = Depends(require_member), db: Session = Depends(get_db)):
             "timezone": t.timezone, "branding": t.branding, "role": ctx.role.value,
             "listed": (t.settings or {}).get("listed", True),
             "history_public": (t.settings or {}).get("history_public", True),
-            "contact": (t.settings or {}).get("contact", {})}
+            "contact": (t.settings or {}).get("contact", {}), "audio": get_audio(t.settings)}
 
 
 class OrgUpdate(BaseModel):
@@ -37,6 +38,7 @@ class OrgUpdate(BaseModel):
     locale: str | None = Field(default=None, max_length=10)
     timezone: str | None = Field(default=None, max_length=60)
     branding: dict | None = None  # {"logo_url","primary_color"}
+    audio: dict | None = None     # filtro de voz / ruído / só idioma do evento
     contact: dict | None = None   # endereço, site, redes sociais (públicos)
     history_public: bool | None = None   # mostrar o histórico de eventos encerrados no perfil público
     listed: bool | None = None    # aparecer na busca pública de igrejas
@@ -49,6 +51,12 @@ def update_org(body: OrgUpdate, ctx: Ctx = Depends(require_admin), db: Session =
     if "branding" in data:  # só chaves permitidas, valores curtos (evita lixo/XSS armazenado)
         allowed = {"primary_color"}  # logo_url só é definido pelo servidor (upload)
         data["branding"] = {k: str(v)[:300] for k, v in data["branding"].items() if k in allowed}
+    if "audio" in data:
+        try:
+            a = clean_audio(data.pop("audio"))
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        t.settings = {**(t.settings or {}), "audio": {**get_audio(t.settings), **a}}
     if "contact" in data:
         try:
             c = clean_contact(data.pop("contact"))

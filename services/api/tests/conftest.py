@@ -102,3 +102,10 @@ def paid_plan():
         db.add(v)
         db.commit()
         return str(v.id)
+
+
+def speech_frame(n_samples: int = 320, amp: int = 6000, freq: float = 220.0, phase: int = 0) -> bytes:
+    """Quadro de 20 ms de um tom (simula VOZ forte) em PCM16 16 kHz. Silêncio (zeros) é descartado pelo portão de voz."""
+    import array, math
+    a = array.array("h", (int(amp * math.sin(2 * math.pi * freq * (phase + i) / 16000)) for i in range(n_samples)))
+    return a.tobytes()

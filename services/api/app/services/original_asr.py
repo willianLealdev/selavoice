@@ -28,6 +28,9 @@ log = logging.getLogger("selavoice.asr")
 URL = "wss://api.deepgram.com/v1/listen"
 MODEL = "nova-3"
 IDLE_CLOSE_S = 90
+LOW_CONF = 0.5          # abaixo disto (em trechos de 3+ palavras) a fala é tratada como ininteligível no idioma do evento
+LOW_HOLD_S = 4.0        # por quantos segundos o "ininteligível" vale depois de detectado
+_low_until: dict[str, float] = {}
 KEEPALIVE_S = 5
 # nosso idioma de origem -> código do Deepgram (só onde difere)
 DG_LANG = {"pt": "pt-BR", "en": "en-US", "zh": "zh-CN"}
@@ -63,7 +66,14 @@ class _Session:
             if m.get("type") != "Results":
                 continue
             self.ok = True
-            txt = (((m.get("channel") or {}).get("alternatives") or [{}])[0].get("transcript") or "").strip()
+            alt = ((m.get("channel") or {}).get("alternatives") or [{}])[0]
+            txt = (alt.get("transcript") or "").strip()
+            if m.get("is_final") and len(txt.split()) >= 3:
+                conf = float(alt.get("confidence") or 0)
+                if conf < LOW_CONF:      # o ASR do idioma do evento não entendeu: algazarra, outro idioma, "línguas estranhas"
+                    _low_until[self.sid] = time.monotonic() + LOW_HOLD_S
+                elif conf >= 0.75:
+                    _low_until.pop(self.sid, None)
             if m.get("is_final"):
                 if txt:
                     self._buf = f"{self._buf} {txt}".strip()
@@ -147,6 +157,11 @@ def feed(tenant_id, session_id, lang: str, chunk: bytes) -> None:
     s.feed(chunk)
 
 
+def unintelligible(session_id) -> bool:
+    """True se, agora, o que se ouve NÃO é fala compreensível no idioma do evento (baixa confiança do Deepgram)."""
+    return _low_until.get(str(session_id), 0.0) > time.monotonic()
+
+
 def active(session_id) -> bool:
     """True se o Deepgram está transcrevendo esta sessão agora (então o Gemini NÃO grava o original)."""
     s = _sessions.get(str(session_id))
@@ -154,6 +169,7 @@ def active(session_id) -> bool:
 
 
 async def close(session_id) -> None:
+    _low_until.pop(str(session_id), None)
     s = _sessions.pop(str(session_id), None)
     if s and not s.task.done():
         s.q.put_nowait(None)

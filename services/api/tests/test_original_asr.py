@@ -14,7 +14,7 @@ from app.db import SessionLocal
 from app.models import TranscriptSegment
 from app.providers import gemini as G
 from app.services import original_asr, secrets_store as sec
-from conftest import make_event
+from conftest import make_event, speech_frame
 from test_gemini import FakeGemini
 
 
@@ -69,7 +69,7 @@ def _run_ingest(client, h, ev, seconds=1.2):
         assert iw.receive_json()["type"] == "ready"
         t0 = time.time()
         while time.time() - t0 < seconds:
-            iw.send_bytes(b"\x00" * 640)
+            iw.send_bytes(speech_frame())
             time.sleep(0.02)
     time.sleep(0.8)   # fecha a transcrição (entrega o que faltava)
     return sid

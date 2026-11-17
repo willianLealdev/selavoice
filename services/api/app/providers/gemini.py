@@ -121,6 +121,10 @@ class GeminiSession(ProviderSession):
         self._out: asyncio.Queue[TranslationEvent | Exception | None] = asyncio.Queue()
         self._buf = bytearray()
         self._acc_out, self._acc_in = _Sentences(), _Sentences()
+        # Idioma do EVENTO (código-base, ex.: "pt"). Quando definido, o que o Gemini detectar em OUTRO idioma (ou "línguas estranhas")
+        # NÃO é entregue ao público (nem voz nem texto) e não vira transcrição original.
+        self.strict_source: str | None = None
+        self._foreign = False
         self._connecting = asyncio.Lock()
         self._stopped = False
         self.first_audio_at: float | None = None     # para medir latência real (1º áudio enviado -> 1º texto recebido)
@@ -196,20 +200,26 @@ class GeminiSession(ProviderSession):
                 sc = msg.get("serverContent")
                 if not sc:
                     continue
+                lc = (sc.get("inputTranscription") or {}).get("languageCode")
+                if lc and self.strict_source:   # o Gemini informa o idioma que ouviu em cada trecho
+                    now_foreign = lc.split("-")[0].lower() != self.strict_source
+                    if now_foreign and not self._foreign:
+                        self._acc_out.text = self._acc_in.text = ""   # descarta frase parcial para não misturar idiomas
+                    self._foreign = now_foreign
                 for part in (sc.get("modelTurn") or {}).get("parts", []):
                     d = (part.get("inlineData") or {}).get("data")
-                    if d:
+                    if d and not self._foreign:
                         pcm = base64.b64decode(d)
                         if not _is_silent(pcm):     # silêncio não é enviado aos ouvintes (economiza banda)
                             self._out.put_nowait(TranslationEvent(text="", is_final=False, audio=pcm))
                 t = (sc.get("outputTranscription") or {}).get("text")
-                if t:
+                if t and not self._foreign:
                     if self.first_text_latency is None and self.first_audio_at:
                         self.first_text_latency = time.monotonic() - self.first_audio_at
                     for item in self._acc_out.add(t):
                         self._emit("out", item)
                 ti = (sc.get("inputTranscription") or {}).get("text")
-                if ti:   # o que o palestrante FALOU (idioma original): serve ao documento pós-evento (reserva do Deepgram)
+                if ti and not self._foreign:   # o que o palestrante FALOU (idioma original): serve ao documento pós-evento (reserva do Deepgram)
                     for item in self._acc_in.add(ti):
                         self._emit("in", item)
                 if sc.get("turnComplete") or sc.get("generationComplete"):

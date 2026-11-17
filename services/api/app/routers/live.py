@@ -25,9 +25,10 @@ from ..core.timeutil import iso
 from ..core.ratelimit import client_ip, rate_limit, ws_counter
 from ..db import SessionLocal, get_db
 from ..deps import Ctx, require_member, require_operator
-from ..models import Event, EventSession, EventStatus, Membership
+from ..models import Event, EventSession, EventStatus, Membership, Tenant
 from ..security import create_listener_token, decode_token
 from ..services import original_asr
+from ..services.audio_gate import AudioGate, gates, get_audio
 from ..services.event_clock import event_limits
 from ..services.plan_schema import limit as plan_limit
 from ..services.channels import manager
@@ -280,7 +281,9 @@ async def ingest_ws(ws: WebSocket, session_id: UUID):
                 await ws.close(code=4409)  # evento não está ao vivo
                 return
             ev_lang = ev.original_language
+            gate_mode = get_audio((db.get(Tenant, sess.tenant_id).settings or {}))["filter"]   # filtro de voz escolhido pela organização
         st = ingest_stats[sid] = {"bytes": 0, "frames": 0, "started": _t.time(), "last_frame": 0.0}
+        gate = gates[sid] = AudioGate(gate_mode)
         await ws.send_json({"type": "ready"})
         window_start, window_bytes = _t.monotonic(), 0
         while True:
@@ -298,13 +301,30 @@ async def ingest_ws(ws: WebSocket, session_id: UUID):
             st["bytes"] += len(data)
             st["frames"] += 1
             st["last_frame"] = _t.time()
-            manager.push_audio(sid, data)  # -> um provedor por idioma ativo (Gemini/Azure); sem ouvintes não há canal => sem custo
-            original_asr.feed(claims["tid"], sid, ev_lang, data)  # transcrição do ORIGINAL (Deepgram), com ou sem ouvintes
+            # Portão de voz: só a voz do palestrante segue; ruído/conversa de fundo e silêncio longo NÃO vão aos provedores (nem custam)
+            for frame in gate.process(data):
+                manager.push_audio(sid, frame)  # -> um provedor por idioma ativo (Gemini/Azure); sem ouvintes não há canal => sem custo
+                original_asr.feed(claims["tid"], sid, ev_lang, frame)  # transcrição do ORIGINAL (Deepgram), com ou sem ouvintes
     except (WebSocketDisconnect, RuntimeError):
         pass
     finally:
         ws_counter.release(ip)
+        gates.pop(sid, None)
         await original_asr.close(sid)  # fecha a transcrição do original (entrega o que faltava)
+
+
+@router.post("/sessions/{session_id}/audio-calibrate")
+def audio_calibrate(session_id: UUID, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
+    """O operador pede para calibrar a voz do palestrante: nos próximos 5 s o sistema aprende o volume dele."""
+    from ..db import scoped
+    s = db.scalar(scoped(db, EventSession, ctx.tenant_id).where(EventSession.id == session_id))
+    if not s:
+        raise HTTPException(404, "Sessão não encontrada.")
+    g = gates.get(str(s.id))
+    if g is None:
+        raise HTTPException(409, "Comece a enviar o áudio (Iniciar captura) antes de calibrar.")
+    g.start_calibration(5.0)
+    return {"seconds": 5}
 
 
 @router.get("/sessions/{session_id}/ingest-status")
@@ -319,5 +339,6 @@ def ingest_status(session_id: UUID, ctx: Ctx = Depends(require_operator), db: Se
     if not st:
         return {"receiving": False}
     elapsed = max(1.0, _t.time() - st["started"])
+    g = gates.get(str(s.id))
     return {"receiving": _t.time() - st["last_frame"] < 3, "bytes": st["bytes"], "frames": st["frames"],
-            "avg_kbps": round(st["bytes"] * 8 / 1000 / elapsed, 1)}
+            "avg_kbps": round(st["bytes"] * 8 / 1000 / elapsed, 1), "filter": g.stats() if g else None}

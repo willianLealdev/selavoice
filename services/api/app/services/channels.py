@@ -18,12 +18,13 @@ from sqlalchemy import select
 
 from ..config import get_settings
 from ..db import SessionLocal
-from ..models import ChannelState, FailoverEvent, ProviderConfig, TranslationChannel
+from ..models import ChannelState, FailoverEvent, ProviderConfig, Tenant, TranslationChannel
 from ..providers.base import ProviderUnavailable, TranslationProvider
 from ..providers.external import AzureProvider, GeminiProvider
 from ..providers.failover import FailoverRouter
 from ..providers.mock import MockProvider
 from . import original_asr
+from .audio_gate import get_audio
 from .billing import minutes_remaining, record_usage
 from .transcripts import hub, write_segment
 
@@ -41,6 +42,7 @@ def build_registry() -> dict[str, TranslationProvider]:
 registry = build_registry()
 router = FailoverRouter(priority=["gemini", "azure", "mock"])
 METER_SECONDS = 60
+ACTIVE_HOLD_S = 3.0   # pausa de até 3 s entre eventos de tradução ainda conta como "traduzindo" (respiros dentro da frase)
 
 
 @dataclass
@@ -60,6 +62,9 @@ class _Chan:
     # Áudio do palestrante (PCM16 16 kHz) esperando para ir ao provedor. Limitada: se o provedor atrasar,
     # descartamos o mais ANTIGO (melhor perder um pedaço do que acumular atraso).
     audio_q: asyncio.Queue = field(default_factory=lambda: asyncio.Queue(maxsize=300))
+    # Tempo COM TRADUÇÃO sendo entregue (s) ainda não lançado no livro-razão. Silêncio não conta.
+    active_s: float = 0.0
+    last_event_t: float = 0.0
     orig_seq: int | None = None   # segmento ORIGINAL provisório em andamento (reserva do Deepgram)
 
 
@@ -149,12 +154,28 @@ class ChannelManager:
             row.active_since = datetime.now(timezone.utc) if state == ChannelState.ACTIVE else None
             db.commit()
 
-    def _meter(self, ch: _Chan) -> None:
+    @staticmethod
+    def _audio_cfg(tenant_id) -> dict:
+        """Configuração de áudio da organização (filtro de voz, só idioma do evento...)."""
+        with SessionLocal() as db:
+            t = db.get(Tenant, tenant_id)
+            return get_audio((t.settings or {}) if t else {})
+
+    @staticmethod
+    def _touch_active(ch: "_Chan") -> None:
+        """Chamado a cada evento de TRADUÇÃO entregue (texto ou voz). Soma o tempo desde o evento anterior, limitado a ACTIVE_HOLD_S:
+        silêncio (sem evento) não acumula => não é cobrado."""
         now = time.monotonic()
-        minutes = (now - ch.metered_to) / 60
+        gap = now - ch.last_event_t if ch.last_event_t else ACTIVE_HOLD_S
+        ch.active_s += min(gap, ACTIVE_HOLD_S)
+        ch.last_event_t = now
+
+    def _meter(self, ch: _Chan) -> None:
+        minutes = ch.active_s / 60          # só tempo COM tradução (silêncio não é cobrado)
         if minutes <= 0:
             return
-        ch.metered_to = now
+        ch.active_s = 0.0
+        ch.metered_to = time.monotonic()
         ch.meter_n += 1
         cost = 0
         prov = registry.get(ch.provider)
@@ -196,16 +217,23 @@ class ChannelManager:
             pump, sess = None, None
             try:
                 sess = await registry[name].start_session(ch.source_lang, ch.lang)
+                strict = self._audio_cfg(ch.tenant_id)["only_event_language"]
+                if strict:   # "só traduzir o idioma do evento": o provedor passa a ignorar fala em outro idioma
+                    sess.strict_source = ch.source_lang.split("-")[0].lower()
                 hub.publish(ch.session_id, ch.lang, {"type": "status", "state": "live", "provider": name})
                 pump = asyncio.create_task(self._pump(ch, sess))
                 async for ev in sess.stream_events():
                     router.report_success(ch.session_id, ch.lang, name)
+                    if strict and original_asr.unintelligible(ch.session_id):
+                        continue   # fala ininteligível no idioma do evento (ex.: "línguas estranhas", algazarra): não traduz nem publica
                     if ev.audio:  # VOZ traduzida do provedor -> ouvintes (quadro binário; não é gravada)
                         hub.publish(ch.session_id, ch.lang, {"type": "audio", "pcm": ev.audio})
+                        self._touch_active(ch)   # há tradução sendo entregue => conta como tempo cobrável
                     if ev.original:
                         await self._write_original(ch, ev)
                     if not ev.text:
                         continue
+                    self._touch_active(ch)
                     out = await write_segment(ch.tenant_id, ch.session_id, ch.lang, ev.text, is_final=ev.is_final,
                                               seq=seq, start_ms=ev.start_ms, end_ms=ev.end_ms, provider=name)
                     if out is not None:

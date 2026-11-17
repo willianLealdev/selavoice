@@ -14,16 +14,17 @@ export default function Profile() {
   const t = useT();
   const [org, setOrg] = useState<any>(null); const [qr, setQr] = useState(""); const [msg, setMsg] = useState<{ ok: boolean; m: string } | null>(null);
   const [name, setName] = useState(""); const [color, setColor] = useState("#0B63CE"); const [listed, setListed] = useState(true); const [hist, setHist] = useState(true);
-  const [c, setC] = useState<Record<string, string>>({}); const [busy, setBusy] = useState(false);
+  const [c, setC] = useState<Record<string, string>>({});
+  const [au, setAu] = useState<{ filter: string; noise_suppression: boolean; only_event_language: boolean }>({ filter: "normal", noise_suppression: true, only_event_language: true }); const [busy, setBusy] = useState(false);
   useEffect(() => {
     api("/organizations/me").then(async (o) => {
-      setOrg(o); setName(o.name); setListed(o.listed); setHist(o.history_public !== false); setC(o.contact ?? {}); setColor(o.branding?.primary_color || "#0B63CE");
+      setOrg(o); setName(o.name); setListed(o.listed); setHist(o.history_public !== false); setC(o.contact ?? {}); if (o.audio) setAu(o.audio); setColor(o.branding?.primary_color || "#0B63CE");
       setQr(await QRCode.toDataURL(`${location.origin}/o/${o.slug}`, { width: 260, margin: 1 }));
     }).catch((e) => setMsg({ ok: false, m: e.message }));
   }, []);
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    try { await api("/organizations/me", { method: "PATCH", json: { name, listed, history_public: hist, contact: c, branding: { primary_color: color } } }); setMsg({ ok: true, m: t("Salvo.") }); }
+    try { await api("/organizations/me", { method: "PATCH", json: { name, listed, history_public: hist, contact: c, audio: au, branding: { primary_color: color } } }); setMsg({ ok: true, m: t("Salvo.") }); }
     catch (x: any) { setMsg({ ok: false, m: x.message }); }
   }
   async function sendLogo(f?: File) {
@@ -56,6 +57,18 @@ export default function Profile() {
             </div>
           </div>
           <label>{t("Nome da organização")}</label><input required minLength={2} value={name} onChange={(e) => setName(e.target.value)} />
+          <h3 style={{ marginTop: 28 }}>{t("Áudio e ruído")}</h3>
+          <p className="fine">{t("Controla o que o sistema traduz quando há barulho, conversa ao redor ou fala em outro idioma.")}</p>
+          <label>{t("Filtro de voz do palestrante")}</label>
+          <div className="choice">
+            {([["off", "Desligado", "Mesa de som com áudio limpo: não filtra nada."], ["normal", "Normal", "Ignora vozes bem mais baixas que a do palestrante (conversa ao redor)."], ["strong", "Forte", "Mais rigoroso: ignora também vozes só um pouco mais baixas."]] as const).map(([k, title, d]) => (
+              <button type="button" key={k} className={au.filter === k ? "on" : ""} onClick={() => setAu({ ...au, filter: k })}><b>{t(title)}</b><span>{t(d)}</span></button>
+            ))}
+          </div>
+          <label className="pf-check"><input type="checkbox" checked={au.noise_suppression} onChange={(e) => setAu({ ...au, noise_suppression: e.target.checked })} /> {t("Reduzir ruído do ambiente na captura pelo navegador")}</label>
+          <label className="pf-check"><input type="checkbox" checked={au.only_event_language} onChange={(e) => setAu({ ...au, only_event_language: e.target.checked })} /> {t("Traduzir somente o idioma do evento (ignorar outras línguas e falas ininteligíveis)")}</label>
+          <p className="fine">{t("O sistema separa a voz principal pelo VOLUME: use um microfone próximo à boca do palestrante (lapela, headset ou de mão) para o filtro funcionar bem.")}</p>
+
           <h3 style={{ marginTop: 28 }}>{t("Dados públicos")}</h3>
           <p className="fine">{t("Aparecem para o público para confirmar que está no lugar certo. Preencha só o que quiser mostrar.")}</p>
           <label>{t("Sobre a organização")}</label><textarea rows={3} maxLength={400} {...f("description")} />

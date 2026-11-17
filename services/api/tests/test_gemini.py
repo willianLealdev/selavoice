@@ -13,13 +13,14 @@ import websockets
 
 from app.providers import gemini as G
 from app.services import secrets_store as sec
-from conftest import make_event, register
+from conftest import make_event, register, speech_frame
 
 
 class FakeGemini:
     """Servidor WebSocket local. Para cada áudio recebido responde com voz + texto traduzido + fim de turno."""
-    def __init__(self, reject_reason: str | None = None, say_turn_complete: bool = True, texts=("Hola ", "a todos.")):
+    def __init__(self, reject_reason: str | None = None, say_turn_complete: bool = True, texts=("Hola ", "a todos."), input_texts=(), input_lang=None):
         self.texts = list(texts)
+        self.input_texts, self.input_lang = list(input_texts), input_lang
         self.setups, self.audio_msgs = [], []
         self.reject, self.turn = reject_reason, say_turn_complete
         self.loop = asyncio.new_event_loop()
@@ -44,13 +45,16 @@ class FakeGemini:
                     self.audio_msgs.append(m["realtimeInput"]["audio"])
                     n += 1
                     if n == 1:
+                        for t in getattr(self, "input_texts", []):   # o que o palestrante falou: o Gemini real manda ANTES da tradução
+                            it = {"text": t}
+                            if getattr(self, "input_lang", None):
+                                it["languageCode"] = self.input_lang      # idioma que o Gemini ouviu (campo real, visto em teste)
+                            await ws.send(json.dumps({"serverContent": {"inputTranscription": it}}))
                         loud, quiet = b"\x00\x20" * 480, b"\x00\x00" * 480      # voz de verdade x áudio mudo
                         for chunk in (loud, quiet, quiet):
                             await ws.send(json.dumps({"serverContent": {"modelTurn": {"parts": [{"inlineData": {"data": base64.b64encode(chunk).decode()}}]}}}))
                         for t in self.texts:
                             await ws.send(json.dumps({"serverContent": {"outputTranscription": {"text": t}}}))
-                        for t in getattr(self, "input_texts", []):   # o que o palestrante falou (idioma original)
-                            await ws.send(json.dumps({"serverContent": {"inputTranscription": {"text": t}}}))
                         if self.turn:
                             await ws.send(json.dumps({"serverContent": {"turnComplete": True}}))
 
@@ -168,7 +172,7 @@ def test_end_to_end_audio_in_voice_and_text_out(client, tenant_a, fake):
             iw.send_json({"type": "auth", "token": itok})
             assert iw.receive_json()["type"] == "ready"
             for _ in range(20):
-                iw.send_bytes(b"\x00" * 640)
+                iw.send_bytes(speech_frame())
                 time.sleep(0.01)
             got_voice, got_text, t0 = False, "", time.time()
             while time.time() - t0 < 8 and not (got_voice and got_text):
