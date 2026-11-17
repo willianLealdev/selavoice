@@ -138,3 +138,14 @@ def test_datetimes_are_returned_with_timezone(client, tenant_a):
     ev = make_event(client, tenant_a)
     assert ev["starts_at"].endswith(("Z", "+00:00"))
     assert client.get(f"/public/join/{ev['join_code']}").json()["starts_at"].endswith(("Z", "+00:00"))
+
+
+def test_webhook_refused_in_production_without_real_secret(client, monkeypatch):
+    """Produção sem segredo de webhook salvo no painel: recusa tudo (nada de aceitar o segredo padrão de desenvolvimento)."""
+    from app.services import billing as B
+    payload = json.dumps({"id": "evt_x", "type": "checkout.session.completed", "data": {"object": {}}}).encode()
+    monkeypatch.setattr(B.settings, "app_env", "production")
+    assert B.webhook_secret() == ""                                                   # padrão de dev ignorado em produção
+    assert not verify_stripe_signature(payload, stripe_signature(payload, ""), "", 300)  # chave vazia nunca valida
+    r = client.post("/billing/webhook/stripe", content=payload, headers={"Stripe-Signature": stripe_signature(payload, S.stripe_webhook_secret)})
+    assert r.status_code == 400                                                       # assinatura forjada com o padrão: recusada

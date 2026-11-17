@@ -15,8 +15,9 @@ Rode e **guarde num lugar seguro** (gerenciador de senhas). **Nunca** coloque no
 ```bash
 python -c "import secrets;print('JWT_SECRET=' + secrets.token_urlsafe(64))"
 python -c "from cryptography.fernet import Fernet;print('ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
-python -c "import secrets;print('STRIPE_WEBHOOK_SECRET=whsec_' + secrets.token_hex(24))"
 ```
+> As chaves de **Stripe, Gemini, Deepgram, DeepSeek, Azure e Resend NÃO vão no ambiente**: você as cola no painel (`/admin/integrations`) e elas ficam cifradas no banco. Em produção, sem o segredo do webhook salvo no painel, o sistema **recusa** webhooks do Stripe.
+
 > ⚠️ **ENCRYPTION_KEY**: cifra as chaves de IA salvas no painel. Se você a perder ou trocar, as chaves salvas ficam ilegíveis (terá de digitá-las de novo). Faça cópia.
 
 ## 2. Serviço `api`
@@ -27,8 +28,6 @@ python -c "import secrets;print('STRIPE_WEBHOOK_SECRET=whsec_' + secrets.token_h
 APP_ENV=production
 JWT_SECRET=<gerado no passo 1>
 ENCRYPTION_KEY=<gerado no passo 1>
-STRIPE_WEBHOOK_SECRET=<gerado no passo 1>
-STRIPE_MODE=fake
 CORS_ORIGINS=https://app.SEUDOMINIO.com
 PUBLIC_WEB_URL=https://app.SEUDOMINIO.com
 DATABASE_URL=sqlite:////data/selavoice.db

@@ -53,6 +53,8 @@ def stripe_signature(payload: bytes, secret: str, ts: int | None = None) -> str:
 
 def verify_stripe_signature(payload: bytes, header: str, secret: str, tolerance: int) -> bool:
     """Valida `Stripe-Signature` (t=timestamp,v1=assinatura) com comparação em tempo constante."""
+    if not secret:  # sem segredo configurado NUNCA aceita (HMAC com chave vazia seria forjável)
+        return False
     try:
         parts = dict(p.split("=", 1) for p in header.split(","))
         ts = int(parts["t"])
@@ -124,8 +126,14 @@ def stripe_mode() -> str:
     return get_secret("stripe", "mode") or settings.stripe_mode or "fake"
 
 
+DEV_WEBHOOK_SECRET = "whsec_dev_fake_secret"
+
+
 def webhook_secret() -> str:
-    return get_secret("stripe", "webhook_secret") or settings.stripe_webhook_secret
+    """Segredo do webhook: painel (banco) > .env. Em PRODUÇÃO o valor padrão de desenvolvimento é IGNORADO (retorna ""),
+    senão qualquer pessoa que conhecesse o padrão poderia forjar um pagamento. Vazio => o webhook é recusado."""
+    v = get_secret("stripe", "webhook_secret") or settings.stripe_webhook_secret
+    return "" if (settings.is_prod and (not v or v == DEV_WEBHOOK_SECRET)) else v
 
 
 def get_stripe():

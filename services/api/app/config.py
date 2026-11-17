@@ -77,8 +77,8 @@ class Settings(BaseSettings):
                 problemas.append("ENCRYPTION_KEY ausente")
             if self.stripe_mode == "live" and not self.stripe_secret_key:
                 problemas.append("STRIPE_SECRET_KEY ausente")
-            if self.stripe_webhook_secret == "whsec_dev_fake_secret":
-                problemas.append("STRIPE_WEBHOOK_SECRET padrão")
+            # Segredo do webhook do Stripe pode vir SÓ do painel (banco). Em produção o valor padrão de desenvolvimento
+            # nunca é aceito: ver services/billing.py::webhook_secret (sem segredo real => webhooks são recusados).
             if "*" in self.cors_origins:
                 problemas.append("CORS aberto (*)")
             if problemas:
