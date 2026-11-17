@@ -60,8 +60,9 @@ export default function Profile() {
           <h3 style={{ marginTop: 28 }}>{t("Áudio e ruído")}</h3>
           <p className="fine">{t("Controla o que o sistema traduz quando há barulho, conversa ao redor ou fala em outro idioma.")}</p>
           <label>{t("Filtro de voz do palestrante")}</label>
-          <div className="choice">
-            {([["off", "Desligado", "Mesa de som com áudio limpo: não filtra nada."], ["normal", "Normal", "Ignora vozes bem mais baixas que a do palestrante (conversa ao redor)."], ["strong", "Forte", "Mais rigoroso: ignora também vozes só um pouco mais baixas."]] as const).map(([k, title, d]) => (
+          <p className="fine" style={{ marginTop: -2 }}>{t("O palestrante fica perto do microfone, então a voz dele chega MAIS ALTA. O filtro ignora o que chega baixinho, como pessoas conversando ao fundo.")}</p>
+          <div className="choice col">
+            {([["off", "Desligado", "Não ignora nada. Use quando o som vem de uma mesa de som (já vem limpo)."], ["normal", "Normal (recomendado)", "Ignora conversa que chega baixinho no microfone. Serve para a maioria dos casos."], ["strong", "Forte", "Ignora até vozes um pouco mais baixas. Use em sala muito barulhenta. Cuidado: pode cortar o palestrante se ele falar muito baixo."]] as const).map(([k, title, d]) => (
               <button type="button" key={k} className={au.filter === k ? "on" : ""} onClick={() => setAu({ ...au, filter: k })}><b>{t(title)}</b><span>{t(d)}</span></button>
             ))}
           </div>

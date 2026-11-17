@@ -4,6 +4,11 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "O palestrante fica perto do microfone, então a voz dele chega MAIS ALTA. O filtro ignora o que chega baixinho, como pessoas conversando ao fundo.": ["The speaker is close to the microphone, so their voice arrives LOUDER. The filter ignores what arrives quietly, like people chatting in the background.", "El orador está cerca del micrófono, así que su voz llega MÁS FUERTE. El filtro ignora lo que llega bajito, como personas conversando al fondo."],
+  "Não ignora nada. Use quando o som vem de uma mesa de som (já vem limpo).": ["Ignores nothing. Use when the sound comes from a sound desk (already clean).", "No ignora nada. Úselo cuando el sonido viene de una mesa de sonido (ya llega limpio)."],
+  "Normal (recomendado)": ["Normal (recommended)", "Normal (recomendado)"],
+  "Ignora conversa que chega baixinho no microfone. Serve para a maioria dos casos.": ["Ignores chatter that arrives quietly in the microphone. Works for most cases.", "Ignora conversaciones que llegan bajito al micrófono. Sirve para la mayoría de los casos."],
+  "Ignora até vozes um pouco mais baixas. Use em sala muito barulhenta. Cuidado: pode cortar o palestrante se ele falar muito baixo.": ["Ignores even slightly quieter voices. Use in a very noisy room. Careful: it may cut the speaker if they talk very quietly.", "Ignora incluso voces un poco más bajas. Úselo en una sala muy ruidosa. Cuidado: puede cortar al orador si habla muy bajo."],
   "Áudio e ruído": ["Audio and noise", "Audio y ruido"],
   "Controla o que o sistema traduz quando há barulho, conversa ao redor ou fala em outro idioma.": ["Controls what the system translates when there is noise, nearby chatter or speech in another language.", "Controla qué traduce el sistema cuando hay ruido, conversaciones alrededor o habla en otro idioma."],
   "Filtro de voz do palestrante": ["Speaker voice filter", "Filtro de voz del orador"],

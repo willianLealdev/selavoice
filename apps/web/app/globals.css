@@ -411,3 +411,6 @@ html { overscroll-behavior-y: none; } body { -webkit-tap-highlight-color: transp
 button, a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* alguns Safari não aplicam 'gap' em tabelas/grades antigas e cortam ícones SVG sem largura: garante o tamanho */
 .icon { min-width: 1em; }
+
+/* opções em lista (uma por linha), para textos longos */
+.choice.col { grid-template-columns: 1fr; }
