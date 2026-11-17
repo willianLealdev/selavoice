@@ -18,7 +18,7 @@ import BackButton from "@/components/BackButton";
 import Icon from "@/components/Icon";
 import OrgContact from "@/components/OrgContact";
 import OrgLogo from "@/components/OrgLogo";
-import LanguagePicker, { Lang } from "@/components/LanguagePicker";
+import LanguagePicker, { Lang, langName } from "@/components/LanguagePicker";
 import { API, WS } from "@/lib/api";
 import { LangSwitch, useLang, useT } from "@/lib/i18n";
 
@@ -124,15 +124,21 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
     try { const m = localStorage.getItem("sv_mode") as Mode | null; if (m) setMode(m); } catch {}
   }, [code, enter]);
 
-  // escolhe o idioma inicial entre os DISPONÍVEIS: preferência salva > idioma do site > inglês > primeiro da lista
+  // IDIOMA: se o ouvinte já escolheu um antes (guardado no celular) e ele existe neste evento, usamos direto, sem perguntar.
+  // Senão mostramos a pergunta "Em qual idioma você quer ouvir?" (a tradução só começa depois da escolha).
+  // O botão de idioma no topo continua disponível para trocar quando quiser.
   const langs: Lang[] = info?.languages ?? [];
+  const [askLang, setAskLang] = useState("");
   useEffect(() => {
     if (!langs.length) return;
     const has = (c: string) => langs.some((l) => l.code === c);
     let saved = ""; try { saved = localStorage.getItem("sv_lang") ?? ""; } catch {}
     if (lang && has(lang)) return;
-    setLang([saved, uiLang, "en"].find((c) => c && has(c)) ?? langs[0].code);
+    if (saved && has(saved)) setLang(saved);
   }, [info]); // eslint-disable-line
+  // vibra de leve quando a transmissão começa (avisa quem está com o celular na mão)
+  const wasLive = useRef(false);
+  useEffect(() => { if (live && !wasLive.current) { try { navigator.vibrate?.(200); } catch {} } wasLive.current = live; }, [live]);
 
   // WebSocket com reconexão e retomada
   useEffect(() => {
@@ -269,6 +275,36 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
               {info.organization_slug && <a className="btn btn-primary btn-sm" style={{ marginTop: 16 }} href={`/o/${info.organization_slug}`}>{t("Ver todos os eventos")} <Icon name="arrow" small /></a>}
             </div>
           </div>
+        </div>
+      )}
+      {langs.length > 0 && !lang && (
+        <div className="modal-bg" role="dialog" aria-modal="true" aria-label={t("Em qual idioma você quer ouvir?")}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h"><h3>{t("Em qual idioma você quer ouvir?")}</h3></div>
+            <p className="fine" style={{ margin: "0 16px" }}>{t("Vamos lembrar da sua escolha neste aparelho. Você pode trocar quando quiser no botão de idioma, no topo.")}</p>
+            <div style={{ padding: "12px 12px 4px" }}>
+              <input value={askLang} onChange={(e) => setAskLang(e.target.value)} placeholder={t("Buscar idioma…")} aria-label={t("Buscar idioma…")} autoFocus />
+            </div>
+            <div className="modal-list" role="listbox">
+              {langs.map((l) => ({ ...l, name: langName(l.code, uiLang) }))
+                .sort((a, b) => a.name.localeCompare(b.name, uiLang))
+                .filter((l) => !askLang.trim() || l.name.toLowerCase().includes(askLang.toLowerCase()) || l.code.toLowerCase().startsWith(askLang.toLowerCase()))
+                .map((l) => (
+                  <button key={l.code} role="option" aria-selected={false} className="lang-row" onClick={() => pick(l.code)}>
+                    {l.name}
+                    {l.speech && <span title={t("Voz")}><Icon name="volume" /></span>}
+                    {l.text && <span title={t("Texto")}><Icon name="text" /></span>}
+                    <span className="code">{l.code}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {live && lang && mode !== "text" && !playing && (
+        <div className="status-bar" role="alert" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "center", flexWrap: "wrap", background: "#0b57d0", color: "#fff" }}>
+          <span><b>{t("Áudio em transmissão!")}</b> {t("Toque no botão Play para ouvir a tradução.")}</span>
+          <button className="btn btn-sm" style={{ background: "#fff", color: "#0b57d0" }} onClick={togglePlay}><Icon name="play" small /> {t("Ouvir agora")}</button>
         </div>
       )}
       {!langs.length && <div className="status-bar" role="status">{t("Tradução indisponível no momento.")}</div>}

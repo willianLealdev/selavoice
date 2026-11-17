@@ -4,6 +4,23 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Em qual idioma você quer ouvir?": ["Which language do you want to listen in?", "¿En qué idioma quiere escuchar?"],
+  "Vamos lembrar da sua escolha neste aparelho. Você pode trocar quando quiser no botão de idioma, no topo.": ["We will remember your choice on this device. You can change it any time with the language button at the top.", "Recordaremos su elección en este dispositivo. Puede cambiarla cuando quiera con el botón de idioma, arriba."],
+  "Áudio em transmissão!": ["Audio is live!", "¡Audio en transmisión!"],
+  "Toque no botão Play para ouvir a tradução.": ["Tap the Play button to hear the translation.", "Toque el botón Play para escuchar la traducción."],
+  "Ouvir agora": ["Listen now", "Escuchar ahora"],
+  "1. Configure o áudio": ["1. Set up the audio", "1. Configure el audio"],
+  "Áudio da transmissão": ["Broadcast audio", "Audio de la transmisión"],
+  "Ligar microfone e transmitir": ["Turn on microphone and broadcast", "Encender micrófono y transmitir"],
+  "Ativar microfone": ["Activate microphone", "Activar micrófono"],
+  "Desligar microfone": ["Turn off microphone", "Apagar micrófono"],
+  "Microfone pronto. Fale e veja o nível mexer; depois clique em Iniciar.": ["Microphone ready. Speak and watch the level move; then click Start.", "Micrófono listo. Hable y vea moverse el nivel; luego haga clic en Iniciar."],
+  "2. Iniciar e traduzir": ["2. Start and translate", "2. Iniciar y traducir"],
+  "Ative o microfone primeiro": ["Activate the microphone first", "Active el micrófono primero"],
+  "O botão Iniciar libera quando o microfone estiver ativo.": ["The Start button unlocks when the microphone is active.", "El botón Iniciar se habilita cuando el micrófono está activo."],
+  "Avançado: capturar por utilitário externo (mesa/computador)": ["Advanced: capture with an external utility (sound desk/computer)", "Avanzado: capturar con una utilidad externa (mesa/computadora)"],
+  "Evento iniciado! Transmitindo e traduzindo.": ["Event started! Broadcasting and translating.", "¡Evento iniciado! Transmitiendo y traduciendo."],
+  "Não consegui abrir a entrada de áudio: ": ["Could not open the audio input: ", "No pude abrir la entrada de audio: "],
   "Esta política explica quais dados o SelaVoice trata ao oferecer tradução simultânea de eventos em voz e texto.": ["This policy explains which data SelaVoice handles when providing simultaneous translation of events in voice and text.", "Esta política explica qué datos trata SelaVoice al ofrecer traducción simultánea de eventos en voz y texto."],
   "DADOS DE CONTA (organizadores e equipe): nome, e-mail e senha (guardada apenas em forma criptografada irreversível). Usamos para entrar na conta, confirmar o e-mail e enviar avisos do serviço.": ["ACCOUNT DATA (organizers and team): name, email and password (stored only in irreversibly encrypted form). We use it to sign in, confirm the email and send service notices.", "DATOS DE CUENTA (organizadores y equipo): nombre, correo y contraseña (guardada solo de forma cifrada irreversible). Los usamos para iniciar sesión, confirmar el correo y enviar avisos del servicio."],
   "OUVINTES: não precisam criar conta. Para ouvir um evento não coletamos nome nem e-mail.": ["LISTENERS: no account needed. To listen to an event we collect neither name nor email.", "OYENTES: no necesitan cuenta. Para escuchar un evento no recopilamos nombre ni correo."],

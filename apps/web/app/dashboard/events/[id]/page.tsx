@@ -9,6 +9,7 @@ import QRCode from "qrcode";
 import Icon from "@/components/Icon";
 import { api, API, getToken } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { useCapture } from "@/lib/useCapture";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const t = useT();
@@ -39,6 +40,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [edit, setEdit] = useState<any>(null);   // formulário de edição (null = fechado)
   const [pw, setPw] = useState("");
   const [use_, setUse] = useState<any>(null);  // horas de transmissão (contam desde o início)
+  const cap = useCapture();                    // captura de áudio na própria tela (configura ANTES de iniciar)
 
   const load = useCallback(async () => {
     const e = await api(`/events/${id}`);
@@ -65,6 +67,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     if (ev.status === "SCHEDULED") { body.starts_at = new Date(edit.starts_at).toISOString(); body.original_language = edit.original_language; body.type = edit.type; }
     await act(() => api(`/events/${id}`, { method: "PATCH", json: body }), "Evento atualizado.");
     setEdit(null);
+  }
+  const sid0 = ev?.sessions?.[0]?.id;
+  async function iniciar() {
+    try {
+      await api(`/events/${id}/start`, { method: "POST" });
+      await load();
+      if (sid0) cap.startSending(sid0);          // a tradução começa AGORA (o microfone já estava pronto)
+      setMsg({ t: "ok", m: "Evento iniciado! Transmitindo e traduzindo." });
+    } catch (e: any) { setMsg({ t: "err", m: e.message }); }
+  }
+  async function encerrar() {
+    cap.stopAll();
+    await act(() => api(`/events/${id}/stop`, { method: "POST" }), "Evento encerrado.");
   }
   async function remove() {
     if (!confirm(`${t("Excluir este evento?")} “${ev.title}”\n${t("Ele some da lista e do público. Isso não pode ser desfeito.")}`)) return;
@@ -113,19 +128,55 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
             </div>
           )}
           {ev.status === "SCHEDULED" && <p className="fine">{t("As horas do plano começam a contar quando você clicar em Iniciar.")}</p>}
+          {ev.status !== "ENDED" && ev.status !== "CANCELED" && sid && (
+            <div style={{ margin: "14px 0", padding: 14, border: "1px solid var(--line)", borderRadius: 12 }}>
+              <b>{ev.status === "SCHEDULED" ? t("1. Configure o áudio") : t("Áudio da transmissão")}</b>
+              {cap.err && <div className="err" style={{ margin: "8px 0" }}>{t(cap.err)}</div>}
+              <div className="row" style={{ marginTop: 8 }}>
+                <select style={{ maxWidth: 360 }} aria-label={t("Entrada de áudio")} value={cap.deviceId} onChange={(e) => cap.setDeviceId(e.target.value)} disabled={cap.micReady}>
+                  <option value="">{t("Padrão do aparelho")}</option>
+                  {cap.devices.map((d) => <option key={d.deviceId} value={d.deviceId}>{d.label || d.deviceId.slice(0, 8)}</option>)}
+                </select>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={cap.listDevices} disabled={cap.micReady}>{t("Listar entradas")}</button>
+              </div>
+              <label className="pf-check" style={{ marginTop: 10 }}><input type="checkbox" checked={cap.ns} disabled={cap.micReady} onChange={(e) => cap.setNs(e.target.checked)} /> {t("Reduzir ruído do ambiente (microfone de sala ou celular)")}</label>
+              <div style={{ margin: "8px 0 12px", height: 14, background: "#e1e8f5", borderRadius: 8, overflow: "hidden" }} aria-label={t("Nível do áudio")}>
+                <div style={{ width: `${cap.level * 100}%`, height: "100%", background: cap.level > 0.9 ? "var(--bad)" : "var(--ok)", transition: "width .08s" }} />
+              </div>
+              <div className="row">
+                {!cap.micReady
+                  ? <button type="button" className="btn btn-primary btn-sm" onClick={cap.openMic}><Icon name="mic" small /> {ev.status === "LIVE" ? t("Ligar microfone e transmitir") : t("Ativar microfone")}</button>
+                  : <button type="button" className="btn btn-ghost btn-sm" onClick={cap.stopAll} disabled={cap.sending}>{t("Desligar microfone")}</button>}
+                {cap.micReady && !cap.sending && ev.status !== "LIVE" && <span className="fine">✓ {t("Microfone pronto. Fale e veja o nível mexer; depois clique em Iniciar.")}</span>}
+                {cap.sending && <span className="fine">{t("Conexão")}: {t(cap.net)}</span>}
+              </div>
+              {ev.status === "LIVE" && cap.micReady && !cap.sending && sid && (
+                <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 10 }} onClick={() => cap.startSending(sid)}>{t("Começar a transmitir")}</button>
+              )}
+              {cap.sending && (
+                <div className="row" style={{ marginTop: 10 }}>
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={cap.cal > 0} onClick={() => cap.calibrate(sid)}><Icon name="mic" small /> {cap.cal > 0 ? `${t("Fale normalmente")}… ${cap.cal}s` : t("Calibrar voz do palestrante")}</button>
+                  <span className="fine">{t("Antes de começar: o palestrante fala por 5 segundos e o sistema aprende o volume dele, para ignorar conversas ao redor.")}</span>
+                </div>
+              )}
+              {cap.diag?.receiving !== undefined && cap.sending && <p className="fine">{t("Servidor")}: {cap.diag.receiving ? `${t("recebendo áudio")} (${cap.diag.avg_kbps} kbps)` : t("aguardando áudio")}</p>}
+            </div>
+          )}
           <div className="row">
             {ev.status === "SCHEDULED" && <>
-              <button className="btn btn-primary" onClick={() => act(() => api(`/events/${id}/start`, { method: "POST" }), "Evento iniciado!")}><Icon name="play" small /> {t("Iniciar")}</button>
+              <button className="btn btn-primary" disabled={!cap.micReady} title={cap.micReady ? "" : t("Ative o microfone primeiro")} onClick={iniciar}><Icon name="play" small /> {t("2. Iniciar e traduzir")}</button>
               <button className="btn btn-ghost" onClick={() => act(() => api(`/events/${id}/cancel`, { method: "POST" }), "Evento cancelado.")}>{t("Cancelar")}</button>
             </>}
-            {ev.status === "LIVE" && <button className="btn btn-danger" onClick={() => act(() => api(`/events/${id}/stop`, { method: "POST" }), "Evento encerrado.")}>{t("Encerrar")}</button>}
+            {ev.status === "LIVE" && <button className="btn btn-danger" onClick={encerrar}>{t("Encerrar")}</button>}
           </div>
-          {sid && ev.status !== "CANCELED" && <>
-            <hr />
-            <Link className="btn btn-primary btn-sm" href={`/dashboard/events/${id}/capture`}><Icon name="mic" small /> {t("Capturar áudio (celular ou computador)")}</Link>{" "}
-            <button className="btn btn-ghost btn-sm" onClick={async () => setToken((await api(`/events/sessions/${sid}/audio-token`)).token)}>{t("Token para utilitário externo (mesa/computador)")}</button>
-            {token && <p className="fine" style={{ wordBreak: "break-all" }}>{t("Cole no utilitário de captura (válido por 4 h, mostrado só agora):")}<br /><code>{token}</code></p>}
-          </>}
+          {ev.status === "SCHEDULED" && !cap.micReady && <p className="fine">{t("O botão Iniciar libera quando o microfone estiver ativo.")}</p>}
+          {sid && ev.status !== "CANCELED" && ev.status !== "ENDED" && (
+            <details style={{ marginTop: 12 }}>
+              <summary className="fine" style={{ cursor: "pointer" }}>{t("Avançado: capturar por utilitário externo (mesa/computador)")}</summary>
+              <button className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={async () => setToken((await api(`/events/sessions/${sid}/audio-token`)).token)}>{t("Token para utilitário externo (mesa/computador)")}</button>
+              {token && <p className="fine" style={{ wordBreak: "break-all" }}>{t("Cole no utilitário de captura (válido por 4 h, mostrado só agora):")}<br /><code>{token}</code></p>}
+            </details>
+          )}
         </div>
         <div className="card" style={{ textAlign: "center" }}>
           <h3>{t("Entrada do público")}</h3>
