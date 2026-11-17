@@ -41,6 +41,7 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
     name: str = Field(min_length=1, max_length=160)
     org_name: str = Field(min_length=2, max_length=160)
+    lang: str = Field(default="pt", pattern="^(pt|en|es)$")   # idioma do e-mail (o mesmo da interface)
     org_type: str = Field(default="church", pattern="^(church|conference|expo|fair|corporate|education|association|other)$")
 
 
@@ -87,7 +88,7 @@ def _issue(db: Session, user: User, response: Response, *, mobile: bool, mfa: bo
     return TokenOut(access_token=access, refresh_token=raw if mobile else None, mfa_required_setup=need_setup)
 
 
-def _new_verification(db: Session, user: User) -> tuple[str, bool]:
+def _new_verification(db: Session, user: User, lang: str = "pt") -> tuple[str, bool]:
     """Invalida links antigos, cria um novo token (24 h) e envia o e-mail. Retorna (token, enviado?)."""
     now = datetime.now(timezone.utc)
     for old in db.scalars(select(EmailVerification).where(EmailVerification.user_id == user.id, EmailVerification.used_at.is_(None))):
@@ -96,7 +97,7 @@ def _new_verification(db: Session, user: User) -> tuple[str, bool]:
     db.add(EmailVerification(user_id=user.id, token_hash=hash_token(raw),
                              expires_at=now + timedelta(hours=settings.email_verification_hours)))
     db.commit()
-    return raw, send_verification(user.email, user.name, raw)
+    return raw, send_verification(user.email, user.name, raw, lang)
 
 
 @router.post("/register", response_model=RegisterOut, status_code=201, dependencies=[Depends(_auth_limit)])
@@ -123,7 +124,7 @@ def register(body: RegisterIn, response: Response, request: Request, db: Session
     grant_trial(db, tenant.id)  # teste gratuito pequeno (não é pagamento)
     audit(db, action="auth.register", actor_id=user.id, tenant_id=tenant.id, ip=client_ip(request))
     if need_verify:   # conta criada, mas INATIVA até o dono do e-mail clicar no link
-        raw, sent = _new_verification(db, user)
+        raw, sent = _new_verification(db, user, body.lang)
         return RegisterOut(verification_required=True, email_sent=sent,
                            dev_verify_token=None if settings.is_prod else raw)
     return RegisterOut(**_issue(db, user, response, mobile=x_client == "mobile", mfa=False).model_dump())
@@ -257,6 +258,7 @@ def me(user: User = Depends(current_user), claims: dict = Depends(current_claims
 # ---------------- Esqueci / redefinir senha (e-mail via Resend) ----------------
 class ForgotIn(BaseModel):
     email: str = Field(min_length=3, max_length=254)
+    lang: str = Field(default="pt", pattern="^(pt|en|es)$")   # idioma do e-mail (o mesmo da interface)
 
 
 @router.post("/forgot", status_code=202, dependencies=[Depends(rate_limit("forgot", 5))])
@@ -268,7 +270,7 @@ def forgot(body: ForgotIn, request: Request, db: Session = Depends(get_db)):
         db.add(PasswordReset(user_id=user.id, token_hash=hash_token(raw),
                              expires_at=datetime.now(timezone.utc) + timedelta(hours=1)))
         db.commit()
-        send_password_reset(user.email, raw)
+        send_password_reset(user.email, raw, body.lang)
         audit(db, action="auth.forgot", actor_id=user.id, ip=client_ip(request))
     return {"detail": "Se o e-mail existir, enviaremos as instruções."}
 
@@ -321,6 +323,7 @@ def verify_email(body: VerifyIn, request: Request, db: Session = Depends(get_db)
 
 class ResendIn(BaseModel):
     email: str = Field(min_length=3, max_length=254)
+    lang: str = Field(default="pt", pattern="^(pt|en|es)$")   # idioma do e-mail (o mesmo da interface)
 
 
 RESEND_COOLDOWN_S = 60
@@ -334,6 +337,6 @@ def resend_verification(body: ResendIn, request: Request, db: Session = Depends(
         last = db.scalar(select(EmailVerification).where(EmailVerification.user_id == user.id).order_by(EmailVerification.created_at.desc()))
         recent = last and (datetime.now(timezone.utc) - last.created_at.replace(tzinfo=timezone.utc)).total_seconds() < RESEND_COOLDOWN_S
         if not recent:
-            _new_verification(db, user)
+            _new_verification(db, user, body.lang)
             audit(db, action="auth.verification_resent", actor_id=user.id, ip=client_ip(request))
     return {"detail": "Se a conta existir e ainda não estiver confirmada, enviamos um novo e-mail."}

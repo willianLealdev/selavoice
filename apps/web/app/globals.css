@@ -394,3 +394,7 @@ html { overscroll-behavior-y: none; } body { -webkit-tap-highlight-color: transp
 
 /* telas muito estreitas: o topo mostra só "Entrar" (o botão "Começar grátis" aparece logo abaixo, no destaque da página) */
 @media (max-width: 420px) { .nav-links .hide-xs { display: none; } }
+
+/* aviso pós-cadastro: confirme o e-mail */
+.check-mail { text-align: center; padding: 8px 0 4px; } .cm-ic { width: 72px; height: 72px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; margin: 0 auto 14px; border: 1px solid #cfe0fb; }
+.cm-ic .icon { width: 32px; height: 32px; } .cm-lead { font-size: 1.0625rem; color: var(--ink); margin: 0; overflow-wrap: anywhere; }

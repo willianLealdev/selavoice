@@ -109,6 +109,7 @@ def members(ctx: Ctx = Depends(require_admin), db: Session = Depends(get_db)):
 class InviteIn(BaseModel):
     email: EmailStr
     role: Role = Role.MEMBER
+    lang: str = Field(default="pt", pattern="^(pt|en|es)$")   # idioma do e-mail (o mesmo da interface)
 
 
 @router.post("/organizations/me/invitations", status_code=201)
@@ -129,7 +130,7 @@ def invite(body: InviteIn, ctx: Ctx = Depends(require_admin), db: Session = Depe
     db.commit()
     audit(db, action="org.invite", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=body.email, ip=ctx.ip)
     org = db.get(Tenant, ctx.tenant_id)
-    emailed = send_invite(body.email.lower(), org.name, raw)
+    emailed = send_invite(body.email.lower(), org.name, raw, body.lang)
     return {"emailed": emailed, "invite_token": None if emailed else raw, "expires_days": 7}
 
 

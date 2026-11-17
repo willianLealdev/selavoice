@@ -62,7 +62,7 @@ def test_resend_is_generic_has_cooldown_and_invalidates_old_link(client, verify_
     old = r.json()["dev_verify_token"]
     sent = []
     import app.routers.auth as A
-    monkeypatch.setattr(A, "send_verification", lambda to, name, token: sent.append((to, token)) or True)
+    monkeypatch.setattr(A, "send_verification", lambda to, name, token, lang="pt": sent.append((to, token)) or True)
     # dentro do intervalo de 1 minuto: não reenvia (mas responde igual)
     r1 = client.post("/auth/resend-verification", json={"email": email})
     assert r1.status_code == 202 and sent == []

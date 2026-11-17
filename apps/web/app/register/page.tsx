@@ -6,10 +6,11 @@ import AuthShell from "@/components/AuthShell";
 import Icon from "@/components/Icon";
 import ResendVerification from "@/components/ResendVerification";
 import { api, setToken } from "@/lib/api";
-import { useT } from "@/lib/i18n";
+import { useLang, useT } from "@/lib/i18n";
 
 export default function Register() {
   const t = useT();
+  const { lang } = useLang();
   const router = useRouter();
   const [f, setF] = useState({ name: "", email: "", password: "", org_name: "", org_type: "corporate" });
   const [err, setErr] = useState("");
@@ -21,21 +22,29 @@ export default function Register() {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
-      const r = await api("/auth/register", { method: "POST", json: f });
+      const r = await api("/auth/register", { method: "POST", json: { ...f, lang } });
       if (r.verification_required) { setSent({ email: f.email, emailSent: !!r.email_sent, devToken: r.dev_verify_token ?? undefined }); return; }
       setToken(r.access_token);
       router.push("/dashboard");
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
   if (sent) return (
-    <AuthShell title={t("Confirme seu e-mail")} subtitle={t("Falta só um passo para ativar sua conta.")}>
-      {sent.emailSent
-        ? <div className="ok" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><Icon name="mail" /><span>{t("Enviamos um e-mail de confirmação para")} <b>{sent.email}</b>. {t("Abra o e-mail e clique em “Confirmar e ativar minha conta”. O link vale por 24 horas.")}</span></div>
-        : <div className="err">{t("Não conseguimos enviar o e-mail de confirmação para")} <b>{sent.email}</b>. {t("Tente reenviar em instantes ou fale com o suporte.")}</div>}
-      <p className="fine">{t("Não achou? Veja a caixa de spam.")}</p>
+    <AuthShell title={t("Verifique seu e-mail")} subtitle={t("Sua conta foi criada, mas ainda não está ativa.")}>
+      <div className="check-mail">
+        <div className="cm-ic"><Icon name="mail" /></div>
+        <p className="cm-lead">{sent.emailSent
+          ? <>{t("Enviamos um e-mail de confirmação para")} <b>{sent.email}</b></>
+          : <>{t("Não conseguimos enviar o e-mail de confirmação para")} <b>{sent.email}</b>. {t("Tente reenviar em instantes ou fale com o suporte.")}</>}</p>
+      </div>
+      <div className="notice" style={{ marginTop: 16 }}><Icon name="shield" small /> <span><b>{t("Você precisa confirmar o e-mail para ativar a conta.")}</b> {t("Sem isso, não é possível entrar.")}</span></div>
+      <ol className="steps" style={{ marginTop: 18 }}>
+        <li>{t("Abra o e-mail que enviamos (veja também a caixa de spam).")}</li>
+        <li>{t("Clique em “Confirmar e ativar minha conta”. O link vale por 24 horas.")}</li>
+        <li>{t("Volte aqui e entre com seu e-mail e senha.")}</li>
+      </ol>
       <ResendVerification email={sent.email} />
       {sent.devToken && <p className="fine" style={{ marginTop: 16 }}>[{t("modo desenvolvimento")}] <Link href={`/verificar?token=${sent.devToken}`}>{t("Confirmar agora")}</Link></p>}
-      <p className="fine" style={{ marginTop: 24 }}><Link href="/login">{t("Já confirmei: entrar")}</Link></p>
+      <p className="fine" style={{ marginTop: 22 }}><Link href="/login">{t("Já confirmei: entrar")}</Link></p>
     </AuthShell>
   );
   return (

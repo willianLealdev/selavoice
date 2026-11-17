@@ -4,6 +4,13 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Verifique seu e-mail": ["Check your email", "Revise su correo"],
+  "Sua conta foi criada, mas ainda não está ativa.": ["Your account was created, but it is not active yet.", "Su cuenta fue creada, pero aún no está activa."],
+  "Você precisa confirmar o e-mail para ativar a conta.": ["You must confirm your email to activate the account.", "Debe confirmar su correo para activar la cuenta."],
+  "Sem isso, não é possível entrar.": ["Without it, you cannot sign in.", "Sin eso, no es posible entrar."],
+  "Abra o e-mail que enviamos (veja também a caixa de spam).": ["Open the email we sent (also check your spam folder).", "Abra el correo que enviamos (revise también la carpeta de spam)."],
+  "Clique em “Confirmar e ativar minha conta”. O link vale por 24 horas.": ["Click “Confirm and activate my account”. The link is valid for 24 hours.", "Haga clic en “Confirmar y activar mi cuenta”. El enlace vale por 24 horas."],
+  "Volte aqui e entre com seu e-mail e senha.": ["Come back here and sign in with your email and password.", "Vuelva aquí e inicie sesión con su correo y contraseña."],
   "Tente reenviar em instantes ou fale com o suporte.": ["Try again in a moment or contact support.", "Inténtelo de nuevo en unos instantes o contacte con soporte."],
   "Não conseguimos enviar o e-mail de confirmação para": ["We could not send the confirmation email to", "No pudimos enviar el correo de confirmación a"],
   "Confirme seu e-mail": ["Confirm your email", "Confirme su correo"],
