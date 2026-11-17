@@ -7,7 +7,7 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import Icon from "@/components/Icon";
-import { api } from "@/lib/api";
+import { api, API, getToken } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,7 +18,24 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [msg, setMsg] = useState<{ t: "ok" | "err"; m: string } | null>(null);
   const [token, setToken] = useState("");
   const [text, setText] = useState("");
-  const [doc, setDoc] = useState<any>(null);
+  const [docs, setDocs] = useState<any[]>([]);   // apostilas SALVAS no evento (ficam aqui até você excluir)
+  const [openDoc, setOpenDoc] = useState("");
+  const DOC_ST: Record<string, string> = { DRAFT: "Rascunho", IN_REVIEW: "Em revisão", APPROVED: "Aprovado", PUBLISHED: "Publicado" };
+  const loadDocs = useCallback(() => api(`/documents/events/${id}`).then(setDocs).catch(() => {}), [id]);
+  useEffect(() => { loadDocs(); }, [loadDocs]);
+  const editCh = (docId: string, i: number, k: "title" | "body", v: string) =>
+    setDocs((all) => all.map((d) => d.id !== docId ? d : { ...d, content: { ...d.content, chapters: d.content.chapters.map((c: any, j: number) => j === i ? { ...c, [k]: v } : c) } }));
+  async function delDoc(d: any) {
+    if (!confirm(`${t("Excluir este documento?")} “${d.title}”\n${t("Ele some do evento, da página da organização e do público.")}`)) return;
+    try { await api(`/documents/${d.id}`, { method: "DELETE" }); setMsg({ t: "ok", m: "Documento excluído." }); loadDocs(); } catch (e: any) { setMsg({ t: "err", m: e.message }); }
+  }
+  async function pdf(d: any) {   // o PDF exige login: baixa com o token e abre numa aba
+    try {
+      const r = await fetch(`${API}/documents/${d.id}/pdf`, { headers: { Authorization: `Bearer ${getToken()}` }, credentials: "include" });
+      if (!r.ok) throw new Error("PDF indisponível.");
+      window.open(URL.createObjectURL(await r.blob()), "_blank");
+    } catch (e: any) { setMsg({ t: "err", m: e.message }); }
+  }
   const [edit, setEdit] = useState<any>(null);   // formulário de edição (null = fechado)
   const [pw, setPw] = useState("");
   const [use_, setUse] = useState<any>(null);  // horas de transmissão (contam desde o início)
@@ -124,27 +141,47 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Cole aqui a transcrição…")} />
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn btn-ghost btn-sm" disabled={!text.trim()} onClick={() => act(() => api(`/documents/events/${id}/original-transcript`, { method: "POST", json: { paragraphs: text.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) } }), "Transcrição importada.")}>{t("Importar transcrição")}</button>
-          <button className="btn btn-primary btn-sm" onClick={() => act(async () => setDoc(await api(`/documents/events/${id}/generate`, { method: "POST" })), "Rascunho do documento criado.")}>{t("Gerar documento")}</button>
+          <button className="btn btn-primary btn-sm" onClick={() => act(() => api(`/documents/events/${id}/generate`, { method: "POST" }), "Rascunho do documento criado.").then(loadDocs)}>{t("Gerar documento")}</button>
         </div>
-        {doc && (
-          <div style={{ marginTop: 16 }}>
-            <div className="row"><b>{doc.title}</b><span className={`pill ${doc.status}`}>{doc.status}</span></div>
-            {doc.flags.length > 0 && <>
+        {docs.length === 0 && <p className="fine" style={{ marginTop: 14 }}>{t("Nenhum documento salvo neste evento ainda.")}</p>}
+        {docs.map((d) => (
+          <div key={d.id} style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+            <div className="row spread"><div className="row"><b>{d.title}</b><span className={`pill ${d.status}`}>{t(DOC_ST[d.status] ?? d.status)}</span><span className="fine">v{d.version} · {d.language}</span></div>
+              <div className="row">
+                <button className="btn btn-ghost btn-sm" onClick={() => setOpenDoc(openDoc === d.id ? "" : d.id)}>{openDoc === d.id ? t("Fechar") : t("Ver e editar")}</button>
+                {(d.status === "APPROVED" || d.status === "PUBLISHED") && <button className="btn btn-ghost btn-sm" onClick={() => pdf(d)}>PDF</button>}
+                <button className="btn btn-ghost btn-sm" onClick={() => delDoc(d)}>{t("Excluir")}</button>
+              </div></div>
+            {openDoc === d.id && (
+              <div style={{ marginTop: 10 }}>
+                {d.status === "APPROVED" || d.status === "PUBLISHED"
+                  ? <p className="fine">{t("Documento aprovado não pode ser editado. Exclua e gere outro se algo estiver errado.")}</p>
+                  : <p className="fine">{t("Corrija o que estiver errado e salve. Salvar volta o documento para rascunho.")}</p>}
+                {(d.content?.chapters ?? []).map((c: any, i: number) => (
+                  <div key={i} style={{ marginBottom: 10 }}>
+                    <input value={c.title} disabled={d.status === "APPROVED" || d.status === "PUBLISHED"} onChange={(e) => editCh(d.id, i, "title", e.target.value)} style={{ fontWeight: 600 }} />
+                    <textarea rows={5} value={c.body} disabled={d.status === "APPROVED" || d.status === "PUBLISHED"} onChange={(e) => editCh(d.id, i, "body", e.target.value)} />
+                  </div>
+                ))}
+                {d.status !== "APPROVED" && d.status !== "PUBLISHED" && <button className="btn btn-primary btn-sm" onClick={() => act(() => api(`/documents/${d.id}`, { method: "PUT", json: { content: d.content } }), "Documento salvo.").then(loadDocs)}>{t("Salvar correções")}</button>}
+              </div>
+            )}
+            {d.flags.length > 0 && <>
               <p className="fine">{t("Referências detectadas (ex.: citações bíblicas): confira cada uma na fonte antes de aprovar. Não inventamos citações.")}</p>
-              {doc.flags.map((f: any) => (
+              {d.flags.map((f: any) => (
                 <div key={f.ref} className="row">
                   <span>{f.reviewed ? "✓" : "○"} {f.ref}</span>
-                  {!f.reviewed && <button className="btn btn-ghost btn-sm" onClick={() => act(async () => setDoc(await api(`/documents/${doc.id}/review-flag`, { method: "POST", json: { ref: f.ref } })), "Referência revisada.")}>{t("Marcar revisada")}</button>}
+                  {!f.reviewed && <button className="btn btn-ghost btn-sm" onClick={() => act(() => api(`/documents/${d.id}/review-flag`, { method: "POST", json: { ref: f.ref } }), "Referência revisada.").then(loadDocs)}>{t("Marcar revisada")}</button>}
                 </div>
               ))}
             </>}
             <div className="row" style={{ marginTop: 12 }}>
-              {doc.status === "DRAFT" && <button className="btn btn-ghost btn-sm" onClick={() => act(async () => setDoc(await api(`/documents/${doc.id}/submit`, { method: "POST" })), "Enviado para revisão.")}>{t("Enviar para revisão")}</button>}
-              {doc.status === "IN_REVIEW" && <button className="btn btn-primary btn-sm" onClick={() => act(async () => setDoc(await api(`/documents/${doc.id}/approve`, { method: "POST", json: {} })), "Aprovado; PDF gerado.")}>{t("Aprovar")}</button>}
-              {doc.status === "APPROVED" && <button className="btn btn-primary btn-sm" onClick={() => act(async () => setDoc(await api(`/documents/${doc.id}/publish`, { method: "POST" })), "Publicado para o público.")}>{t("Publicar")}</button>}
+              {d.status === "DRAFT" && <button className="btn btn-ghost btn-sm" onClick={() => act(() => api(`/documents/${d.id}/submit`, { method: "POST" }), "Enviado para revisão.").then(loadDocs)}>{t("Enviar para revisão")}</button>}
+              {d.status === "IN_REVIEW" && <button className="btn btn-primary btn-sm" onClick={() => act(() => api(`/documents/${d.id}/approve`, { method: "POST", json: {} }), "Aprovado; PDF gerado.").then(loadDocs)}>{t("Aprovar")}</button>}
+              {d.status === "APPROVED" && <button className="btn btn-primary btn-sm" onClick={() => act(() => api(`/documents/${d.id}/publish`, { method: "POST" }), "Publicado para o público.").then(loadDocs)}>{t("Publicar")}</button>}
             </div>
           </div>
-        )}
+        ))}
       </div>
     </>
   );

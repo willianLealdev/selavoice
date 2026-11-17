@@ -86,8 +86,11 @@ def org_profile(slug: str, db: Session = Depends(get_db)):
         .order_by(Event.status.desc(), Event.starts_at).limit(10)).all()
     live = [e for e in evs if e.status == EventStatus.LIVE]
     rest = [e for e in evs if e.status != EventStatus.LIVE]
+    from ..models import DocStatus, Document
+
     def _ev(e: Event) -> dict:
-        return {"title": e.title, "type": e.type, "presenter": e.presenter, "theme": e.theme, "status": e.status.value,
+        books = db.scalars(select(Document).where(Document.event_id == e.id, Document.status == DocStatus.PUBLISHED)).all()
+        return {"booklets": [{"id": str(b.id), "title": b.title, "language": b.language} for b in books], "title": e.title, "type": e.type, "presenter": e.presenter, "theme": e.theme, "status": e.status.value,
                 "starts_at": iso(e.starts_at), "join_code": e.join_code}
 
     # HISTÓRICO público: eventos ENCERRADOS (a organização pode desligar em Perfil -> "Mostrar histórico").

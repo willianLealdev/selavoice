@@ -77,6 +77,29 @@ def generate(event_id: UUID, ctx: Ctx = Depends(require_operator), db: Session =
     return dout(d)
 
 
+@router.get("/events/{event_id}")
+def list_event_docs(event_id: UUID, ctx: Ctx = Depends(require_member), db: Session = Depends(get_db)):
+    """Todas as apostilas/documentos SALVOS deste evento (rascunho, revisão, aprovado, publicado)."""
+    if not db.scalar(scoped(db, Event, ctx.tenant_id).where(Event.id == event_id)):
+        raise HTTPException(404, "Evento não encontrado.")
+    docs = db.scalars(scoped(db, Document, ctx.tenant_id).where(Document.event_id == event_id).order_by(Document.created_at.desc())).all()
+    return [dout(d) for d in docs]
+
+
+@router.delete("/{doc_id}")
+def delete_doc(doc_id: UUID, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
+    """Exclui a apostila (rascunho, aprovada ou publicada): some do evento, da página da organização e do público; apaga o PDF."""
+    d = _get(db, ctx, doc_id)
+    if d.pdf_key:
+        path = (STORAGE / d.pdf_key).resolve()
+        if str(path).startswith(str((STORAGE / str(ctx.tenant_id)).resolve())):   # só apaga dentro da pasta da própria organização
+            path.unlink(missing_ok=True)
+    db.delete(d)
+    db.commit()
+    audit(db, action="doc.delete", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(doc_id), ip=ctx.ip)
+    return {"ok": True}
+
+
 @router.get("/{doc_id}")
 def get_doc(doc_id: UUID, ctx: Ctx = Depends(require_member), db: Session = Depends(get_db)):
     return dout(_get(db, ctx, doc_id))

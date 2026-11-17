@@ -4,6 +4,18 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Nenhum documento salvo neste evento ainda.": ["No saved documents in this event yet.", "Aún no hay documentos guardados en este evento."],
+  "Em revisão": ["In review", "En revisión"],
+  "Aprovado": ["Approved", "Aprobado"],
+  "Ver e editar": ["View and edit", "Ver y editar"],
+  "Documento aprovado não pode ser editado. Exclua e gere outro se algo estiver errado.": ["An approved document cannot be edited. Delete it and generate another if something is wrong.", "Un documento aprobado no se puede editar. Elimínelo y genere otro si algo está mal."],
+  "Corrija o que estiver errado e salve. Salvar volta o documento para rascunho.": ["Fix anything wrong and save. Saving sets the document back to draft.", "Corrija lo que esté mal y guarde. Al guardar vuelve a borrador."],
+  "Salvar correções": ["Save corrections", "Guardar correcciones"],
+  "Documento salvo.": ["Document saved.", "Documento guardado."],
+  "Excluir este documento?": ["Delete this document?", "¿Eliminar este documento?"],
+  "Ele some do evento, da página da organização e do público.": ["It disappears from the event, the organization page and the public.", "Desaparece del evento, de la página de la organización y del público."],
+  "Documento excluído.": ["Document deleted.", "Documento eliminado."],
+  "Apostilas": ["Booklets", "Apuntes"],
   "Excluir este evento?": ["Delete this event?", "¿Eliminar este evento?"],
   "Ele some da lista e do público. Isso não pode ser desfeito.": ["It disappears from the list and from the public. This cannot be undone.", "Desaparece de la lista y del público. No se puede deshacer."],
   "Próximos e ao vivo": ["Upcoming and live", "Próximos y en vivo"],

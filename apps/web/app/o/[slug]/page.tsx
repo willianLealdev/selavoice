@@ -11,10 +11,10 @@ import DateBox from "@/components/DateBox";
 import Icon from "@/components/Icon";
 import OrgContact from "@/components/OrgContact";
 import OrgLogo from "@/components/OrgLogo";
-import { api, ORG_TYPES } from "@/lib/api";
+import { api, API, ORG_TYPES } from "@/lib/api";
 import { LangSwitch, useLang, useT } from "@/lib/i18n";
 
-type Ev = { title: string; type: string; presenter: string; theme: string; status: string; starts_at: string; join_code: string };
+type Ev = { booklets?: { id: string; title: string; language: string }[]; title: string; type: string; presenter: string; theme: string; status: string; starts_at: string; join_code: string };
 
 export default function Perfil({ params }: { params: Promise<{ slug: string }> }) {
   const t = useT();
@@ -32,7 +32,8 @@ export default function Perfil({ params }: { params: Promise<{ slug: string }> }
     !q.trim() || `${e.title} ${e.presenter} ${e.theme}`.toLowerCase().includes(q.trim().toLowerCase())), [org, q]);
 
   const card = (e: Ev) => (
-    <Link key={e.join_code} href={`/e/${e.join_code}`} className={`ev-card ${e.status === "LIVE" ? "is-live" : ""}`}>
+    <div key={e.join_code}>
+    <Link href={`/e/${e.join_code}`} className={`ev-card ${e.status === "LIVE" ? "is-live" : ""}`}>
       <DateBox iso={e.starts_at} locale={lang} />
       <div className="ev-body">
         <div className="ev-title">{e.title}</div>
@@ -47,6 +48,10 @@ export default function Perfil({ params }: { params: Promise<{ slug: string }> }
         <span className="ev-go">{e.status === "LIVE" ? t("Entrar e ouvir") : e.status === "ENDED" ? t("Ver transcrição") : t("Ver evento")} <Icon name="arrow" small /></span>
       </div>
     </Link>
+    {!!e.booklets?.length && (
+      <div className="l-docs" style={{ margin: "6px 0 14px 4px" }}><Icon name="doc" small /> <span>{t("Apostilas")}:</span> {e.booklets.map((b) => <a key={b.id} href={`${API}/public/booklets/${e.join_code}/${b.id}/pdf`} target="_blank" rel="noreferrer">{b.title}</a>)}</div>
+    )}
+    </div>
   );
 
   return (

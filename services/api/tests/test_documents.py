@@ -51,3 +51,24 @@ def test_unpublished_hidden_from_public_then_visible(client, tenant_a):
     assert client.get(f"/public/booklets/{code}/{did}/pdf").status_code == 404
     client.post(f"/documents/{did}/publish", headers=tenant_a)
     assert client.get(f"/public/booklets/{code}/{did}/pdf").content.startswith(b"%PDF")
+
+
+def test_event_lists_saved_docs_org_page_shows_published_and_delete(client, tenant_a, tenant_b):
+    ev, d = _setup(client, tenant_a)
+    did = d["id"]
+    lst = client.get(f"/documents/events/{ev['id']}", headers=tenant_a).json()
+    assert [x["id"] for x in lst] == [did]                                              # fica salvo no evento
+    assert client.get(f"/documents/events/{ev['id']}", headers=tenant_b).status_code == 404   # outra organização: 404
+    slug = client.get("/organizations/me", headers=tenant_a).json()["slug"]
+    ev_row = lambda: next(e for e in client.get(f"/public/orgs/{slug}").json()["events"] if e["join_code"] == ev["join_code"])
+    assert ev_row()["booklets"] == []                                                   # rascunho não aparece
+    client.post(f"/documents/{did}/submit", headers=tenant_a)
+    for f in d["flags"]:
+        client.post(f"/documents/{did}/review-flag", json={"ref": f["ref"]}, headers=tenant_a)
+    client.post(f"/documents/{did}/approve", json={"note": "ok"}, headers=tenant_a)
+    client.post(f"/documents/{did}/publish", headers=tenant_a)
+    assert [b["id"] for b in ev_row()["booklets"]] == [did]                             # publicado aparece na página da organização
+    assert client.delete(f"/documents/{did}", headers=tenant_b).status_code == 404
+    assert client.delete(f"/documents/{did}", headers=tenant_a).status_code == 200
+    assert client.get(f"/documents/events/{ev['id']}", headers=tenant_a).json() == []
+    assert ev_row()["booklets"] == [] and client.get(f"/public/booklets/{ev['join_code']}").json() == []

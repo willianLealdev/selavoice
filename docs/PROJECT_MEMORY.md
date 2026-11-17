@@ -121,3 +121,4 @@ Python 3.12 em `services/api/.venv`; Node 24; sem Docker; SQLite. Senhas de demo
 - **Editar evento**: `PATCH /events/{id}` aceita título/palestrante/tema/descrição/privacidade em qualquer estado (exceto cancelado); idioma/tipo/data/gravação só AGENDADO.
 - **Excluir evento**: `DELETE /events/{id}` (exclusão lógica `events.deleted_at`, migração 0009; ao vivo = 409; some das listas e do público). Lista do painel: abas "Próximos e ao vivo" x "Histórico" (encerrados/cancelados).
 - Testes: 133 passando. Não verificado em navegador nesta rodada.
+- **Apostilas salvas no evento**: `GET /documents/events/{id}` lista tudo que foi gerado (antes só aparecia na hora); tela do evento mostra rascunho/revisão/aprovado/publicado com Ver e editar, PDF e Excluir (`DELETE /documents/{id}`, apaga o PDF). Perfil público da organização traz `booklets` (publicadas) em cada evento. Testes: 134.
