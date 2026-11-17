@@ -22,12 +22,12 @@ from ..config import get_settings
 from ..core.ratelimit import client_ip, rate_limit
 from ..db import get_db
 from ..deps import current_claims, current_user
-from ..models import Membership, PasswordReset, RefreshToken, Role, Tenant, User
+from ..models import EmailVerification, Membership, PasswordReset, RefreshToken, Role, Tenant, User
 from ..security import (create_access_token, decrypt_secret, encrypt_secret, hash_password,
                         hash_token, new_refresh_token, new_totp_secret, totp_uri,
                         validate_password_strength, verify_password, verify_totp)
 from ..services.billing import grant_trial
-from ..services.email import send_password_reset
+from ..services.email import email_configured, send_password_reset, send_verification
 
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -48,6 +48,17 @@ class LoginIn(BaseModel):
     email: str = Field(min_length=3, max_length=254)  # sem validar domínio: o seed usa .local
     password: str = Field(max_length=200)
     totp_code: str | None = None
+
+
+class RegisterOut(BaseModel):
+    """Cadastro: com confirmação de e-mail LIGADA não há login ainda (verification_required=True e sem tokens)."""
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    mfa_required_setup: bool = False
+    verification_required: bool = False
+    email_sent: bool = False
+    dev_verify_token: str | None = None  # SÓ em desenvolvimento/teste (nunca em produção)
 
 
 class TokenOut(BaseModel):
@@ -76,7 +87,19 @@ def _issue(db: Session, user: User, response: Response, *, mobile: bool, mfa: bo
     return TokenOut(access_token=access, refresh_token=raw if mobile else None, mfa_required_setup=need_setup)
 
 
-@router.post("/register", response_model=TokenOut, status_code=201, dependencies=[Depends(_auth_limit)])
+def _new_verification(db: Session, user: User) -> tuple[str, bool]:
+    """Invalida links antigos, cria um novo token (24 h) e envia o e-mail. Retorna (token, enviado?)."""
+    now = datetime.now(timezone.utc)
+    for old in db.scalars(select(EmailVerification).where(EmailVerification.user_id == user.id, EmailVerification.used_at.is_(None))):
+        old.used_at = now
+    raw = secrets.token_urlsafe(32)
+    db.add(EmailVerification(user_id=user.id, token_hash=hash_token(raw),
+                             expires_at=now + timedelta(hours=settings.email_verification_hours)))
+    db.commit()
+    return raw, send_verification(user.email, user.name, raw)
+
+
+@router.post("/register", response_model=RegisterOut, status_code=201, dependencies=[Depends(_auth_limit)])
 def register(body: RegisterIn, response: Response, request: Request, db: Session = Depends(get_db),
              x_client: str | None = Header(default=None)):
     err = validate_password_strength(body.password)
@@ -86,7 +109,9 @@ def register(body: RegisterIn, response: Response, request: Request, db: Session
     if db.scalar(select(User).where(User.email == email)):
         # Resposta neutra o suficiente; não confirma a existência (mas 409 é necessário para UX).
         raise HTTPException(409, "Não foi possível criar a conta com esses dados.")
-    user = User(email=email, name=body.name, password_hash=hash_password(body.password))
+    need_verify = settings.email_verification_required
+    user = User(email=email, name=body.name, password_hash=hash_password(body.password),
+                email_verified_at=None if need_verify else datetime.now(timezone.utc))
     slug = _slugify(body.org_name)
     if db.scalar(select(Tenant).where(Tenant.slug == slug)):
         slug = f"{slug}-{uuid.uuid4().hex[:5]}"
@@ -97,7 +122,11 @@ def register(body: RegisterIn, response: Response, request: Request, db: Session
     db.commit()
     grant_trial(db, tenant.id)  # teste gratuito pequeno (não é pagamento)
     audit(db, action="auth.register", actor_id=user.id, tenant_id=tenant.id, ip=client_ip(request))
-    return _issue(db, user, response, mobile=x_client == "mobile", mfa=False)
+    if need_verify:   # conta criada, mas INATIVA até o dono do e-mail clicar no link
+        raw, sent = _new_verification(db, user)
+        return RegisterOut(verification_required=True, email_sent=sent,
+                           dev_verify_token=None if settings.is_prod else raw)
+    return RegisterOut(**_issue(db, user, response, mobile=x_client == "mobile", mfa=False).model_dump())
 
 
 @router.post("/login", response_model=TokenOut, dependencies=[Depends(_auth_limit)])
@@ -118,6 +147,9 @@ def login(body: LoginIn, response: Response, request: Request, db: Session = Dep
                 audit(db, action="auth.lockout", actor_id=user.id, ip=client_ip(request), commit=False)
             db.commit()
         raise generic
+    if settings.email_verification_required and not user.email_verified_at:
+        # Só chega aqui com a SENHA CORRETA, então avisar não revela nada a terceiros.
+        raise HTTPException(403, "E-mail ainda não confirmado. Abra o link que enviamos para ativar a conta.")
     mfa_ok = False
     if user.is_super_admin and user.mfa_enabled:
         if not body.totp_code or not verify_totp(decrypt_secret(user.mfa_secret_enc), body.totp_code):
@@ -258,9 +290,50 @@ def reset(body: ResetIn, request: Request, db: Session = Depends(get_db)):
     user = db.get(User, pr.user_id)
     user.password_hash = hash_password(body.password)
     user.failed_logins, user.locked_until = 0, None
+    user.email_verified_at = user.email_verified_at or now   # quem redefine pelo link do e-mail provou ser dono dele
     pr.used_at = now
     for t in db.scalars(select(RefreshToken).where(RefreshToken.user_id == user.id)):
         t.revoked = True  # derruba todas as sessões antigas
     db.commit()
     audit(db, action="auth.password_reset", actor_id=user.id, ip=client_ip(request))
     return {"ok": True}
+
+
+# ---------------- Confirmação de e-mail ----------------
+class VerifyIn(BaseModel):
+    token: str = Field(max_length=200)
+
+
+@router.post("/verify-email", dependencies=[Depends(_auth_limit)])
+def verify_email(body: VerifyIn, request: Request, db: Session = Depends(get_db)):
+    """Ativa a conta com o token do e-mail (uso único, expira). O token só existe no link enviado ao dono do e-mail."""
+    ev = db.scalar(select(EmailVerification).where(EmailVerification.token_hash == hash_token(body.token)))
+    now = datetime.now(timezone.utc)
+    if not ev or ev.used_at or ev.expires_at.replace(tzinfo=timezone.utc) < now:
+        raise HTTPException(400, "Link inválido ou expirado. Peça um novo e-mail de confirmação.")
+    user = db.get(User, ev.user_id)
+    user.email_verified_at = user.email_verified_at or now
+    ev.used_at = now
+    db.commit()
+    audit(db, action="auth.email_verified", actor_id=user.id, ip=client_ip(request))
+    return {"ok": True}
+
+
+class ResendIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
+RESEND_COOLDOWN_S = 60
+
+
+@router.post("/resend-verification", status_code=202, dependencies=[Depends(rate_limit("resendverify", 5))])
+def resend_verification(body: ResendIn, request: Request, db: Session = Depends(get_db)):
+    """Reenvia o e-mail de confirmação. Resposta SEMPRE igual (não revela se o e-mail tem conta); no máx. 1 envio por minuto."""
+    user = db.scalar(select(User).where(User.email == body.email.lower()))
+    if user and user.status == "active" and not user.email_verified_at and settings.email_verification_required:
+        last = db.scalar(select(EmailVerification).where(EmailVerification.user_id == user.id).order_by(EmailVerification.created_at.desc()))
+        recent = last and (datetime.now(timezone.utc) - last.created_at.replace(tzinfo=timezone.utc)).total_seconds() < RESEND_COOLDOWN_S
+        if not recent:
+            _new_verification(db, user)
+            audit(db, action="auth.verification_resent", actor_id=user.id, ip=client_ip(request))
+    return {"detail": "Se a conta existir e ainda não estiver confirmada, enviamos um novo e-mail."}

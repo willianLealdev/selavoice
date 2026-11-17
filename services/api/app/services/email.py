@@ -63,3 +63,14 @@ def send_password_reset(to: str, token: str) -> bool:
              f'font-weight:bold">Criar nova senha</a></p><p>O link vale por 1 hora e só pode ser usado uma vez.</p>')
     return send_email(to, "Redefinição de senha — SelaVoice", _layout("Redefinir senha", inner),
                       f"Redefina sua senha em: {link} (vale 1 hora, uso único)")[0]
+
+
+def send_verification(to: str, name: str, token: str) -> bool:
+    """E-mail de CONFIRMAÇÃO do cadastro. O link leva a /verificar?token=... (uso único, vale 24 h)."""
+    link = f"{settings.public_web_url}/verificar?token={token}"
+    inner = (f"<p>Olá, {html.escape(name or 'tudo bem')}! Para <b>ativar sua conta</b> no SelaVoice, confirme este e-mail:</p>"
+             f'<p><a href="{html.escape(link)}" style="background:#0b63ce;color:#fff;padding:12px 20px;'
+             f'border-radius:8px;text-decoration:none;font-weight:bold">Confirmar e ativar minha conta</a></p>'
+             f"<p>O link vale por {settings.email_verification_hours} horas e só pode ser usado uma vez.</p>")
+    return send_email(to, "Confirme seu e-mail — SelaVoice", _layout("Confirme seu e-mail", inner),
+                      f"Confirme seu e-mail para ativar a conta: {link} (vale {settings.email_verification_hours} h, uso único)")[0]

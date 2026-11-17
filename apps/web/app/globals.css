@@ -391,3 +391,6 @@ html { overscroll-behavior-y: none; } body { -webkit-tap-highlight-color: transp
 .nav { padding-top: env(safe-area-inset-top); }
 @media (display-mode: standalone) { .back-bar { margin-bottom: 14px; } }
 .home-top img { mix-blend-mode: multiply; }
+
+/* telas muito estreitas: o topo mostra só "Entrar" (o botão "Começar grátis" aparece logo abaixo, no destaque da página) */
+@media (max-width: 420px) { .nav-links .hide-xs { display: none; } }

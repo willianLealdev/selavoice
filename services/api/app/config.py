@@ -34,6 +34,10 @@ class Settings(BaseSettings):
 
     # --- Limites / proteção ---
     max_login_failures: int = 5
+    # Confirmação de e-mail ao cadastrar. None = automático: LIGADA em produção, desligada em dev/teste (para os testes
+    # e o uso local não dependerem de e-mail). Defina REQUIRE_EMAIL_VERIFICATION=true/false para forçar.
+    require_email_verification: bool | None = None
+    email_verification_hours: int = 24
     lockout_minutes: int = 15
     rate_limit_per_minute: int = 120  # por IP (rotas gerais)
     auth_rate_limit_per_minute: int = 10  # por IP (login/registro)
@@ -88,6 +92,10 @@ class Settings(BaseSettings):
     @property
     def cors_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def email_verification_required(self) -> bool:
+        return self.is_prod if self.require_email_verification is None else self.require_email_verification
 
     @property
     def is_prod(self) -> bool:

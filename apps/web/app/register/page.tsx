@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import AuthShell from "@/components/AuthShell";
+import Icon from "@/components/Icon";
+import ResendVerification from "@/components/ResendVerification";
 import { api, setToken } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 
@@ -12,6 +14,7 @@ export default function Register() {
   const [f, setF] = useState({ name: "", email: "", password: "", org_name: "", org_type: "corporate" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<null | { email: string; emailSent: boolean; devToken?: string }>(null);
   const set = (k: string) => (e: React.ChangeEvent<any>) => setF({ ...f, [k]: e.target.value });
 
   async function submit(e: React.FormEvent) {
@@ -19,10 +22,22 @@ export default function Register() {
     setBusy(true); setErr("");
     try {
       const r = await api("/auth/register", { method: "POST", json: f });
+      if (r.verification_required) { setSent({ email: f.email, emailSent: !!r.email_sent, devToken: r.dev_verify_token ?? undefined }); return; }
       setToken(r.access_token);
       router.push("/dashboard");
     } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   }
+  if (sent) return (
+    <AuthShell title={t("Confirme seu e-mail")} subtitle={t("Falta só um passo para ativar sua conta.")}>
+      {sent.emailSent
+        ? <div className="ok" style={{ display: "flex", gap: 10, alignItems: "flex-start" }}><Icon name="mail" /><span>{t("Enviamos um e-mail de confirmação para")} <b>{sent.email}</b>. {t("Abra o e-mail e clique em “Confirmar e ativar minha conta”. O link vale por 24 horas.")}</span></div>
+        : <div className="err">{t("Não conseguimos enviar o e-mail de confirmação para")} <b>{sent.email}</b>. {t("Tente reenviar em instantes ou fale com o suporte.")}</div>}
+      <p className="fine">{t("Não achou? Veja a caixa de spam.")}</p>
+      <ResendVerification email={sent.email} />
+      {sent.devToken && <p className="fine" style={{ marginTop: 16 }}>[{t("modo desenvolvimento")}] <Link href={`/verificar?token=${sent.devToken}`}>{t("Confirmar agora")}</Link></p>}
+      <p className="fine" style={{ marginTop: 24 }}><Link href="/login">{t("Já confirmei: entrar")}</Link></p>
+    </AuthShell>
+  );
   return (
     <AuthShell title={t("Criar conta da organização")} subtitle={t("Você ganha 1 evento de teste. Sem cartão de crédito.")}>
       <form onSubmit={submit}>

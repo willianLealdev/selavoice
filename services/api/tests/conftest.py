@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 """Fixtures de teste. Usa SQLite temporário e modo `test` (sem chaves externas)."""
 import os
 import pathlib
@@ -71,7 +72,8 @@ def _super_headers(client):
     from app.security import decrypt_secret
     email = f"su{uuid.uuid4().hex[:6]}@t.com"
     with SessionLocal() as db:
-        db.add(User(email=email, name="SU", is_super_admin=True, password_hash=hash_password(PW)))
+        db.add(User(email=email, name="SU", is_super_admin=True, password_hash=hash_password(PW),
+                    email_verified_at=datetime.now(timezone.utc)))  # como o seed: super admin já confirmado
         db.commit()
     r = client.post("/auth/login", json={"email": email, "password": PW})
     assert r.status_code == 200 and r.json()["mfa_required_setup"] is True

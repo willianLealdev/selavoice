@@ -48,8 +48,9 @@ export default function Landing() {
             <Link className="hide-m" href="/buscar">{t("Encontrar um evento")}</Link>
             <LangSwitch />
             <InstallApp className="btn btn-ghost btn-sm hide-m" />
-            <Link href="/login" className="hide-m">{t("Entrar")}</Link>
-            <Link className="btn btn-primary btn-sm" href="/register">{t("Começar grátis")}</Link>
+            {/* "Entrar" leva à tela que pergunta: ouvinte ou palestrante (o palestrante segue para o login) */}
+            <Link className="btn btn-ghost btn-sm" href="/app">{t("Entrar")}</Link>
+            <Link className="btn btn-primary btn-sm hide-xs" href="/register">{t("Começar grátis")}</Link>
           </nav>
         </div>
       </header>
@@ -173,7 +174,7 @@ export default function Landing() {
             <div><img src="/logo.webp" alt="SelaVoice" style={{ height: 32 }} /><p style={{ marginTop: 12, maxWidth: 260 }}>{t("Tradução simultânea em voz e texto, para qualquer evento.")}</p></div>
             <div><h4>{t("Produto")}</h4><ul><li><a href="#recursos">{t("Recursos")}</a></li><li><a href="#precos">{t("Preços")}</a></li><li><a href="#apps">{t("Aplicativos")}</a></li></ul></div>
             <div><h4>{t("Para o público")}</h4><ul><li><Link href="/buscar">{t("Encontrar um evento")}</Link></li></ul></div>
-            <div><h4>{t("Conta")}</h4><ul><li><Link href="/login">{t("Entrar")}</Link></li><li><Link href="/register">{t("Criar conta")}</Link></li></ul></div>
+            <div><h4>{t("Conta")}</h4><ul><li><Link href="/app">{t("Entrar")}</Link></li><li><Link href="/register">{t("Criar conta")}</Link></li></ul></div>
           </div>
           <div className="row spread"><span>© {new Date().getFullYear()} SelaVoice. {t("Todos os direitos reservados.")}</span><span><Link href="/legal/privacidade">{t("Privacidade")}</Link> · <Link href="/legal/termos">{t("Termos")}</Link></span></div>
         </div>

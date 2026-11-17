@@ -5,6 +5,7 @@ A senha do super admin vem de SUPER_ADMIN_PASSWORD; se vazia, é gerada ALEATÓR
 Em produção NÃO cria tenants de demonstração (só super admin + planos).
 """
 import secrets
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -37,7 +38,7 @@ def run() -> None:
         if not db.scalar(select(User).where(User.email == settings.super_admin_email)):
             pw = settings.super_admin_password or secrets.token_urlsafe(18) + "Aa1"
             db.add(User(email=settings.super_admin_email, name="Super Admin", is_super_admin=True,
-                        password_hash=hash_password(pw)))
+                        password_hash=hash_password(pw), email_verified_at=datetime.now(timezone.utc)))
             db.commit()
             if not settings.super_admin_password:
                 print(f"[seed] Super admin: {settings.super_admin_email}  senha (única vez): {pw}")
@@ -52,7 +53,8 @@ def run() -> None:
         if not settings.is_prod and not db.scalar(select(Tenant).where(Tenant.slug == "ufc-church")):
             t = Tenant(name="UFC Church", slug="ufc-church", type="church", timezone="America/Los_Angeles")
             pw = secrets.token_urlsafe(14) + "Aa1"
-            u = User(email="pastor@ufcchurch.local", name="Pastor Demo", password_hash=hash_password(pw))
+            u = User(email="pastor@ufcchurch.local", name="Pastor Demo", password_hash=hash_password(pw),
+                     email_verified_at=datetime.now(timezone.utc))
             db.add_all([t, u])
             db.flush()
             db.add(Membership(user_id=u.id, tenant_id=t.id, role=Role.TENANT_ADMIN))

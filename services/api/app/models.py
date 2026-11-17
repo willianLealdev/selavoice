@@ -87,6 +87,8 @@ class User(_Mixin, Base):
     is_super_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     mfa_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)  # cifrado (Fernet)
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Quando o dono do e-mail confirmou (link enviado no cadastro). NULL = conta ainda NÃO ativada (não consegue entrar).
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_logins: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -112,6 +114,15 @@ class Invitation(_Mixin, Base):
 class PasswordReset(_Mixin, Base):
     """Token de redefinição de senha: guardado só como hash, uso único, expira em 1 h."""
     __tablename__ = "password_resets"
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class EmailVerification(_Mixin, Base):
+    """Token de confirmação de e-mail: guardado só como hash, uso único, expira (padrão 24 h)."""
+    __tablename__ = "email_verifications"
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -15,14 +15,20 @@ const STATUS: Record<string, string> = {
 
 export default function Acessos() {
   const t = useT();
+  const [pend, setPend] = useState<any>(null);
   const [a, setA] = useState<any>(null); const [err, setErr] = useState(""); const [ok, setOk] = useState("");
-  const load = () => api("/admin/access").then(setA).catch((e) => setErr(e.message));
+  const load = () => { api("/admin/access").then(setA).catch((e) => setErr(e.message)); api("/admin/users/pending").then(setPend).catch(() => {}); };
   useEffect(() => { load(); const h = setInterval(load, 20000); return () => clearInterval(h); }, []); // atualiza a cada 20 s
   async function revoke(u: any) {
     const reason = prompt(`${t("Motivo para derrubar as sessões de")} ${u.email} (${t("mín. 10 caracteres")}):`);
     if (!reason) return;
     try { const r = await api(`/admin/users/${u.user_id}/revoke-sessions`, { method: "POST", json: { reason } }); setOk(`${r.revoked} ${t("sessão(ões) derrubada(s).")}`); load(); }
     catch (e: any) { setErr(e.message); }
+  }
+  async function activate(u: any) {
+    const reason = prompt(`${t("Motivo para ATIVAR manualmente")} ${u.email} (${t("mín. 10 caracteres")}):`);
+    if (!reason) return;
+    try { await api(`/admin/users/${u.user_id}/verify`, { method: "POST", json: { reason } }); setOk(t("Conta ativada.")); load(); } catch (e: any) { setErr(e.message); }
   }
   const w = a?.events_week ?? {};
   return (
@@ -51,6 +57,15 @@ export default function Acessos() {
             {!a.sessions.length && <tr><td colSpan={7} className="fine">{t("Ninguém logado no momento.")}</td></tr>}
           </tbody></table>
         </Panel>
+
+        {pend && pend.users.length > 0 && (
+          <Panel title={t("Contas aguardando confirmação de e-mail")} hint={pend.email_configured ? t("O e-mail de confirmação foi enviado; você pode ativar manualmente se necessário.") : t("O envio de e-mails (Resend) ainda não está configurado: ative manualmente as contas de teste.")}>
+            <table><thead><tr><th>{t("Usuário")}</th><th>{t("Organização")}</th><th>{t("Criada em")}</th><th></th></tr></thead><tbody>
+              {pend.users.map((u: any) => <tr key={u.user_id}><td><b>{u.email}</b><div className="fine">{u.name}</div></td><td>{u.org}</td><td>{new Date(u.created_at).toLocaleString()}</td>
+                <td><button className="btn btn-ghost btn-sm" onClick={() => activate(u)}>{t("Ativar manualmente")}</button></td></tr>)}
+            </tbody></table>
+          </Panel>
+        )}
 
         {a.locked.length > 0 && (
           <Panel title={t("Contas bloqueadas por tentativas erradas")}>

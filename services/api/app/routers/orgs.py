@@ -153,6 +153,7 @@ def accept(body: AcceptIn, db: Session = Depends(get_db)):
         user = User(email=inv.email, name=body.name, password_hash=hash_password(body.password))
         db.add(user)
         db.flush()
+    user.email_verified_at = user.email_verified_at or now   # o convite foi enviado ao e-mail dele: provou ser o dono
     db.add(Membership(user_id=user.id, tenant_id=inv.tenant_id, role=inv.role))
     inv.accepted_at = now
     db.commit()

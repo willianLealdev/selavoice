@@ -265,3 +265,26 @@ def set_rate(name: str, body: RateIn, request: Request, su: User = Depends(requi
     audit(db, action="admin.provider_rate", actor_id=su.id, actor_role="SUPER_ADMIN", target=name, ip=client_ip(request),
           meta={"usd_per_min": body.usd_per_min})
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- contas aguardando confirmação de e-mail
+@router.get("/users/pending")
+def pending_users(db: Session = Depends(get_db)):
+    """Contas criadas que ainda NÃO confirmaram o e-mail (não conseguem entrar)."""
+    from ..services.email import email_configured
+    rows = db.scalars(select(User).where(User.email_verified_at.is_(None)).order_by(User.created_at.desc()).limit(200)).all()
+    orgs = {m.user_id: t.name for m, t in db.execute(select(Membership, Tenant).join(Tenant, Tenant.id == Membership.tenant_id)).all()}
+    return {"email_configured": email_configured(),
+            "users": [{"user_id": str(u.id), "email": u.email, "name": u.name, "org": orgs.get(u.id, "—"), "created_at": iso(u.created_at)} for u in rows]}
+
+
+@router.post("/users/{user_id}/verify")
+def verify_user(user_id: UUID, body: RevokeIn, request: Request, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    """Ativa a conta MANUALMENTE (ex.: o e-mail ainda não está configurado ou não chegou). Motivo obrigatório + auditoria."""
+    u = db.get(User, user_id)
+    if not u:
+        raise HTTPException(404)
+    u.email_verified_at = u.email_verified_at or datetime.now(timezone.utc)
+    db.commit()
+    audit(db, action="admin.verify_user", actor_id=su.id, actor_role="SUPER_ADMIN", target=str(u.id), reason=body.reason, ip=client_ip(request))
+    return {"ok": True}
