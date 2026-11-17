@@ -15,7 +15,7 @@ export default function Events() {
   const { lang } = useLang();
   const [events, setEvents] = useState<Ev[]>([]);
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
+  const [tab, setTab] = useState<"up" | "hist">("up");   // Próximos (agendados e ao vivo) x Histórico (encerrados e cancelados)
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [f, setF] = useState({ title: "", type: "conference", starts_at: "", presenter: "", theme: "", original_language: "pt", recording_policy: "none" });
@@ -24,10 +24,17 @@ export default function Events() {
   const load = () => {
     const p = new URLSearchParams();
     if (q) p.set("q", q);
-    if (status) p.set("status", status);
+    p.set("limit", "200");
     api<Ev[]>(`/events?${p}`).then(setEvents).catch((e) => setErr(e.message));
   };
-  useEffect(load, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = events.filter((e) => (tab === "up" ? e.status === "SCHEDULED" || e.status === "LIVE" : e.status === "ENDED" || e.status === "CANCELED"))
+    .sort((a, b) => (tab === "up" ? a.starts_at.localeCompare(b.starts_at) : b.starts_at.localeCompare(a.starts_at)));   // próximos: o mais perto primeiro; histórico: o mais recente primeiro
+  async function del(e: React.MouseEvent, ev: Ev) {
+    e.preventDefault(); e.stopPropagation();   // o card inteiro é um link: o botão não deve abrir o evento
+    if (!confirm(`${t("Excluir este evento?")} “${ev.title}”\n${t("Ele some da lista e do público. Isso não pode ser desfeito.")}`)) return;
+    try { await api(`/events/${ev.id}`, { method: "DELETE" }); load(); } catch (x: any) { setErr(x.message); }
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault(); setErr("");
@@ -72,13 +79,14 @@ export default function Events() {
       )}
       <div className="row" style={{ marginBottom: 14 }}>
         <input style={{ maxWidth: 280 }} placeholder={t("Buscar por título…")} value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
-        <select style={{ maxWidth: 200 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">{t("Todos os status")}</option><option value="SCHEDULED">{t("Agendado")}</option><option value="LIVE">{t("AO VIVO")}</option><option value="ENDED">{t("Encerrado")}</option><option value="CANCELED">{t("Cancelado")}</option>
-        </select>
         <button className="btn btn-ghost btn-sm" onClick={load}>{t("Buscar")}</button>
       </div>
+      <div className="tabs" role="tablist" style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <button role="tab" aria-selected={tab === "up"} className={`btn btn-sm ${tab === "up" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTab("up")}>{t("Próximos e ao vivo")} ({events.filter((e) => e.status === "SCHEDULED" || e.status === "LIVE").length})</button>
+        <button role="tab" aria-selected={tab === "hist"} className={`btn btn-sm ${tab === "hist" ? "btn-primary" : "btn-ghost"}`} onClick={() => setTab("hist")}>{t("Histórico")} ({events.filter((e) => e.status === "ENDED" || e.status === "CANCELED").length})</button>
+      </div>
       <div className="ev-list">
-        {events.map((e) => (
+        {shown.map((e) => (
           <Link key={e.id} href={`/dashboard/events/${e.id}`} className={`ev-card ${e.status === "LIVE" ? "is-live" : ""}`}>
             <DateBox iso={e.starts_at} locale={lang} />
             <div className="ev-body">
@@ -90,11 +98,12 @@ export default function Events() {
             </div>
             <div className="ev-side">
               <span className={`pill ${e.status}`}>{t(STATUS[e.status] ?? e.status)}</span>
+              {e.status !== "LIVE" && <button type="button" className="btn btn-ghost btn-sm" onClick={(x) => del(x, e)}>{t("Excluir")}</button>}
               <span className="ev-go">{t("Abrir")} <Icon name="arrow" small /></span>
             </div>
           </Link>
         ))}
-        {!events.length && <div className="empty-card"><Icon name="calendar" /><b>{t("Nenhum evento ainda. Clique em “Novo evento”.")}</b></div>}
+        {!shown.length && <div className="empty-card"><Icon name="calendar" /><b>{tab === "up" ? t("Nenhum evento ainda. Clique em “Novo evento”.") : t("Nenhum evento no histórico ainda.")}</b></div>}
       </div>
     </>
   );

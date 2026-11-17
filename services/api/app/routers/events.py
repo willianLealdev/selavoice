@@ -60,6 +60,17 @@ class EventUpdate(BaseModel):
     theme: str | None = None
     scripture: str | None = None
     recording_policy: str | None = Field(default=None, pattern="^(none|transcript_only|audio_and_transcript)$")
+    type: str | None = Field(default=None, pattern="^(service|conference|expo|fair|lecture|training|meeting|other)$")
+    original_language: str | None = Field(default=None, max_length=10)
+    timezone: str | None = Field(default=None, max_length=60)
+    # privacidade: private=True exige senha (nova ou já existente); private=False torna público (apaga a senha)
+    private: bool | None = None
+    access_password: str | None = Field(default=None, min_length=4, max_length=60)
+
+
+# Campos do "encaixe técnico" do evento (idioma da fala, tipo, data, gravação): só enquanto AGENDADO.
+# Texto de apresentação (título, palestrante, tema…) e privacidade podem mudar também ao vivo ou depois.
+SCHEDULED_ONLY = {"type", "original_language", "timezone", "starts_at", "recording_policy"}
 
 
 def out(e: Event) -> dict:
@@ -72,7 +83,7 @@ def out(e: Event) -> dict:
 
 
 def get_event_or_404(db: Session, ctx: Ctx, event_id: UUID) -> Event:
-    ev = db.scalar(scoped(db, Event, ctx.tenant_id).where(Event.id == event_id))
+    ev = db.scalar(scoped(db, Event, ctx.tenant_id).where(Event.id == event_id, Event.deleted_at.is_(None)))
     if not ev:
         raise HTTPException(404, "Evento não encontrado.")
     return ev
@@ -100,7 +111,7 @@ def list_events(ctx: Ctx = Depends(require_member), db: Session = Depends(get_db
                 presenter: str | None = None, date_from: datetime | None = None, date_to: datetime | None = None,
                 limit: int = Query(50, le=200), offset: int = 0):
     """Histórico pesquisável por data/título/palestrante/tipo (somente do tenant)."""
-    stmt = scoped(db, Event, ctx.tenant_id)
+    stmt = scoped(db, Event, ctx.tenant_id).where(Event.deleted_at.is_(None))
     if q:
         stmt = stmt.where(Event.title.ilike(f"%{q}%"))
     if status:
@@ -125,10 +136,22 @@ def get_event(event_id: UUID, ctx: Ctx = Depends(require_member), db: Session = 
 @router.patch("/{event_id}")
 def update_event(event_id: UUID, body: EventUpdate, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
     ev = get_event_or_404(db, ctx, event_id)
-    if ev.status != EventStatus.SCHEDULED:
-        raise HTTPException(409, "Só eventos agendados podem ser editados.")
-    for k, v in body.model_dump(exclude_none=True).items():
-        setattr(ev, k, v)
+    if ev.status == EventStatus.CANCELED:
+        raise HTTPException(409, "Evento cancelado não pode ser editado.")
+    data = body.model_dump(exclude_unset=True)
+    priv, pw = data.pop("private", None), data.pop("access_password", None)
+    if ev.status != EventStatus.SCHEDULED and (SCHEDULED_ONLY & {k for k, v in data.items() if v is not None}):
+        raise HTTPException(409, "Idioma, tipo, data e gravação só mudam enquanto o evento está agendado.")
+    for k, v in data.items():
+        if v is not None:
+            setattr(ev, k, v)
+    if priv is False:
+        ev.access_password_hash = None                    # virou público
+    elif priv is True or pw:
+        if pw:
+            ev.access_password_hash = hash_password(pw)   # nova senha (a antiga deixa de valer)
+        elif not ev.access_password_hash:
+            raise HTTPException(422, "Evento privado precisa de uma senha (mínimo 4 caracteres).")
     db.commit()
     audit(db, action="event.update", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(ev.id), ip=ctx.ip)
     return out(ev)
@@ -137,6 +160,19 @@ def update_event(event_id: UUID, body: EventUpdate, ctx: Ctx = Depends(require_o
 def _transition(ev: Event, to: EventStatus) -> None:
     if to not in TRANSITIONS[ev.status]:
         raise HTTPException(409, f"Transição inválida: {ev.status.value} -> {to.value}.")
+
+
+@router.delete("/{event_id}")
+def delete_event(event_id: UUID, ctx: Ctx = Depends(require_admin), db: Session = Depends(get_db)):
+    """Exclui o evento (some das listas e do público). Ao vivo não pode: encerre antes. A exclusão é LÓGICA: o histórico de
+    uso/cobrança e a auditoria continuam existindo."""
+    ev = get_event_or_404(db, ctx, event_id)
+    if ev.status == EventStatus.LIVE:
+        raise HTTPException(409, "Encerre o evento antes de excluir.")
+    ev.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    audit(db, action="event.delete", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(ev.id), ip=ctx.ip)
+    return {"ok": True}
 
 
 @router.post("/{event_id}/cancel")

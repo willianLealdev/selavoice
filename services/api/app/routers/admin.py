@@ -20,7 +20,7 @@ from ..core.timeutil import iso
 from ..db import get_db
 from ..deps import require_super
 from ..models import (AuditLog, BillingType, CreditLedger, Event, FailoverEvent, Membership, Plan, PlanVersion, Tenant,
-                      TenantSubscription, UsageEvent, User, Entitlement)
+                      TenantSubscription, TopupPack, UsageEvent, User, Entitlement)
 from ..providers.base import ProviderHealth
 from ..security import create_access_token
 from ..services.billing import get_stripe
@@ -466,3 +466,69 @@ def deactivate_entitlement(ent_id: UUID, body: ReasonIn, request: Request, su: U
     audit(db, action="admin.deactivate_plan", actor_id=su.id, actor_role="SUPER_ADMIN", tenant_id=e.tenant_id, target=str(e.id),
           reason=body.reason, ip=client_ip(request))
     return _ent_out(e)
+
+
+# ---------------- Pacotes de RECARGA (o dono cria; o cliente compra quando o saldo acaba) ----------------
+from ..services.billing import apply_topup
+
+
+class PackIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    hours: int = Field(default=0, ge=0, le=100000)
+    events: int = Field(default=0, ge=0, le=100000)
+    amount_cents: int = Field(ge=0, le=10_000_000)
+    currency: str = Field(default="usd", min_length=3, max_length=3)
+
+
+def _pack_out(p: TopupPack) -> dict:
+    return {"id": str(p.id), "name": p.name, "hours": p.hours, "events": p.events, "amount_cents": p.amount_cents,
+            "currency": p.currency, "status": p.status}
+
+
+@router.get("/topups")
+def list_packs(_: User = Depends(require_super), db: Session = Depends(get_db)):
+    return [_pack_out(p) for p in db.scalars(select(TopupPack).order_by(TopupPack.amount_cents))]
+
+
+@router.post("/topups", status_code=201)
+def create_pack(body: PackIn, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    if body.hours == 0 and body.events == 0:
+        raise HTTPException(422, "O pacote precisa ter horas ou eventos.")
+    p = TopupPack(name=body.name, hours=body.hours, events=body.events, amount_cents=body.amount_cents, currency=body.currency.lower())
+    db.add(p)
+    db.commit()
+    audit(db, action="admin.topup_create", actor_id=su.id, actor_role="SUPER_ADMIN", target=str(p.id))
+    return _pack_out(p)
+
+
+@router.patch("/topups/{pack_id}")
+def update_pack(pack_id: UUID, status: str = "published", su: User = Depends(require_super), db: Session = Depends(get_db)):
+    """Só publica/arquiva (preço e conteúdo não mudam: crie outro pacote; compras antigas ficam como estão)."""
+    p = db.get(TopupPack, pack_id)
+    if not p:
+        raise HTTPException(404, "Pacote não encontrado.")
+    if status not in ("published", "archived"):
+        raise HTTPException(422, "Status inválido.")
+    p.status = status
+    db.commit()
+    audit(db, action="admin.topup_status", actor_id=su.id, actor_role="SUPER_ADMIN", target=str(p.id), meta={"status": status})
+    return _pack_out(p)
+
+
+class ManualTopupIn(ReasonIn):
+    hours: int = Field(default=0, ge=0, le=100000)
+    events: int = Field(default=0, ge=0, le=100000)
+
+
+@router.post("/tenants/{tenant_id}/topup", status_code=201)
+def manual_topup(tenant_id: UUID, body: ManualTopupIn, request: Request, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    """Soma horas/eventos ao saldo SEM pagamento (cortesia, ajuste, cliente pagou por fora)."""
+    if not db.get(Tenant, tenant_id):
+        raise HTTPException(404, "Organização não encontrada.")
+    if body.hours == 0 and body.events == 0:
+        raise HTTPException(422, "Informe horas ou eventos.")
+    ent = apply_topup(db, tenant_id, hours=body.hours, events=body.events, ref=f"manual-topup:{_uuid.uuid4().hex}")
+    db.commit()
+    audit(db, action="admin.manual_topup", actor_id=su.id, actor_role="SUPER_ADMIN", tenant_id=tenant_id, reason=body.reason,
+          ip=client_ip(request), meta={"hours": body.hours, "events": body.events})
+    return _ent_out(ent)

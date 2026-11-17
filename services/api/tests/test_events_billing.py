@@ -15,7 +15,7 @@ def test_lifecycle_and_invalid_transitions(client, tenant_a):
     assert ev["status"] == "SCHEDULED" and ev["join_url"].startswith("/e/")
     assert client.post(f"/events/{eid}/stop", headers=tenant_a).status_code == 409   # SCHEDULED -> ENDED inválido
     assert client.post(f"/events/{eid}/start", headers=tenant_a).status_code == 200  # trial cobre 1 evento
-    assert client.patch(f"/events/{eid}", json={"title": "x"}, headers=tenant_a).status_code == 409
+    assert client.patch(f"/events/{eid}", json={"original_language": "en"}, headers=tenant_a).status_code == 409   # após encerrar, idioma não muda
     assert client.post(f"/events/{eid}/cancel", headers=tenant_a).status_code == 409  # LIVE -> CANCELED inválido
     assert client.post(f"/events/{eid}/stop", headers=tenant_a).json()["status"] == "ENDED"
     assert client.post(f"/events/{eid}/start", headers=tenant_a).status_code == 409

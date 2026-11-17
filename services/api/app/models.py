@@ -174,6 +174,8 @@ class Event(_Mixin, Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Segundos COM FALA/TRADUÇÃO (as horas do plano contam só isto; silêncio e pausas não gastam horas).
+    # EXCLUÍDO pelo cliente: some das listas e do público, mas o registro fica (cobrança e auditoria dependem dele).
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     active_seconds: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     sessions: Mapped[list["EventSession"]] = relationship(back_populates="event", cascade="all, delete-orphan")
 
@@ -404,3 +406,16 @@ TENANT_TABLES = [
     "tenant_subscriptions", "one_off_purchases", "entitlements", "usage_events", "credit_ledger",
     "failover_events", "notifications",
 ]
+
+
+class TopupPack(_Mixin, Base):
+    """PACOTE DE RECARGA: o cliente compra horas (e/ou eventos) extras quando o saldo acaba antes do fim do período.
+    Preço e conteúdo são definidos pelo dono no painel. Pago via Stripe (webhook) ou concedido manualmente."""
+    __tablename__ = "topup_packs"
+    name: Mapped[str] = mapped_column(String(80))
+    hours: Mapped[int] = mapped_column(Integer, default=0)          # horas de transmissão (com fala) adicionadas
+    events: Mapped[int] = mapped_column(Integer, default=0)         # eventos adicionados (0 = só horas)
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(3), default="usd")
+    status: Mapped[str] = mapped_column(String(12), default="published")   # published | archived
+    stripe_price_id: Mapped[str | None] = mapped_column(String(80), nullable=True)

@@ -33,6 +33,14 @@ export default function Organizacoes() {
       setG({ ...g, reason: "" }); api(`/admin/tenants/${gx.id}/entitlements`).then(setEnts); load();
     } catch (e: any) { setErr(e.message); }
   }
+  const [tp, setTp] = useState({ hours: "", events: "", reason: "" });
+  async function topup(e: React.FormEvent) {
+    e.preventDefault(); setErr("");
+    try {
+      await api(`/admin/tenants/${gx.id}/topup`, { method: "POST", json: { hours: Number(tp.hours) || 0, events: Number(tp.events) || 0, reason: tp.reason } });
+      setTp({ hours: "", events: "", reason: "" }); api(`/admin/tenants/${gx.id}/entitlements`).then(setEnts);
+    } catch (x: any) { setErr(x.message); }
+  }
   async function off(en: any) {
     const reason = prompt(`${t("Motivo para DESATIVAR este plano")} (${t("mín. 10 caracteres")}):`); if (!reason) return;
     try { await api(`/admin/entitlements/${en.id}/deactivate`, { method: "POST", json: { reason } }); api(`/admin/tenants/${gx.id}/entitlements`).then(setEnts); } catch (e: any) { setErr(e.message); }
@@ -59,6 +67,13 @@ export default function Organizacoes() {
             <label>{t("Motivo (fica registrado)")}</label>
             <input required minLength={10} value={g.reason} onChange={(e) => setG({ ...g, reason: e.target.value })} placeholder={t("Ex.: parceria com a igreja X")} />
             <div className="row" style={{ marginTop: 12 }}><button className="btn btn-primary">{t("Ativar plano")}</button><button type="button" className="btn btn-ghost" onClick={() => setGx(null)}>{t("Fechar")}</button></div>
+          </form>
+          <h4 style={{ margin: "20px 0 8px" }}>{t("Adicionar horas ou eventos ao saldo (recarga manual)")}</h4>
+          <form onSubmit={topup} className="row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div><label>{t("Horas")}</label><input type="number" min={0} style={{ width: 90 }} value={tp.hours} onChange={(e) => setTp({ ...tp, hours: e.target.value })} /></div>
+            <div><label>{t("Eventos extras")}</label><input type="number" min={0} style={{ width: 90 }} value={tp.events} onChange={(e) => setTp({ ...tp, events: e.target.value })} /></div>
+            <div style={{ flex: 1, minWidth: 200 }}><label>{t("Motivo (fica registrado)")}</label><input required minLength={10} value={tp.reason} onChange={(e) => setTp({ ...tp, reason: e.target.value })} /></div>
+            <button className="btn btn-ghost">{t("Adicionar")}</button>
           </form>
           <h4 style={{ margin: "20px 0 8px" }}>{t("Saldos atuais desta organização")}</h4>
           <table><thead><tr><th>{t("Origem")}</th><th>{t("Eventos restantes")}</th><th>{t("Horas restantes")}</th><th>{t("Validade")}</th><th>{t("Status")}</th><th></th></tr></thead><tbody>

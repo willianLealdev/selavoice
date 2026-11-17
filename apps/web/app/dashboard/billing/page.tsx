@@ -8,9 +8,10 @@ import { countsHours, planLines } from "@/lib/plans";
 export default function Billing() {
   const t = useT();
   const [plans, setPlans] = useState<any[]>([]);
+  const [packs, setPacks] = useState<any[]>([]);
   const [usage, setUsage] = useState<any>(null);
   const [msg, setMsg] = useState("");
-  const load = () => { api("/plans").then(setPlans); api("/usage").then(setUsage).catch(() => {}); };
+  const load = () => { api("/plans").then(setPlans); api("/topups").then(setPacks).catch(() => {}); api("/usage").then(setUsage).catch(() => {}); };
   useEffect(load, []);
 
   async function buy(pv: string) {
@@ -19,6 +20,10 @@ export default function Billing() {
       location.href = r.checkout_url;
     } catch (e: any) { setMsg(e.message); }
   }
+  async function buyPack(id: string) {
+    try { const r = await api("/topups/checkout", { method: "POST", json: { pack_id: id } }); location.href = r.checkout_url; } catch (e: any) { setMsg(e.message); }
+  }
+  const low = usage && usage.event_minutes_remaining !== null && usage.event_minutes_remaining < 60;
   return (
     <>
       <div className="page-h"><h1>{t("Plano e uso")}</h1></div>
@@ -32,6 +37,22 @@ export default function Billing() {
           <div className="card"><b>{usage.language_minutes_remaining >= 5e8 ? "∞" : usage.language_minutes_remaining}</b>{t("minutos-idioma restantes")}</div>
           <div className="card"><b>{Math.round(usage.language_minutes_used)}</b>{t("minutos-idioma usados")}</div>
         </div>
+      )}
+      {packs.length > 0 && (
+        <>
+          <h2>{t("Recarregar")}</h2>
+          <p className="fine">{low ? t("Seu saldo de horas está acabando. Recarregue sem trocar de plano.") : t("Acabou o saldo antes do fim do período? Compre horas extras, sem trocar de plano.")}</p>
+          <div className="grid-3">
+            {packs.map((p) => (
+              <div className="card price" key={p.id}>
+                <h3>{p.name}</h3>
+                <div className="amount">{money(p.amount_cents, p.currency)}</div>
+                <ul>{p.hours > 0 && <li>+{p.hours} {t("horas de transmissão")}</li>}{p.events > 0 && <li>+{p.events} {t("eventos")}</li>}</ul>
+                <button className="btn btn-primary" onClick={() => buyPack(p.id)}>{t("Recarregar")}</button>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <h2>{t("Contratar")}</h2>
       <div className="grid-3">

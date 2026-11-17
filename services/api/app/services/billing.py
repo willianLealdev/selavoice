@@ -25,7 +25,7 @@ from .plan_schema import UNLIM, grant_amounts, is_unlimited, limit as plan_limit
 from .platform_settings import get_trial
 from .secrets_store import get_secret
 from ..models import (BillingType, CreditLedger, Entitlement, Event, EventStatus, OneOffPurchase,
-                      PlanVersion, StripeWebhookEvent, Tenant, TenantSubscription, UsageEvent)
+                      PlanVersion, StripeWebhookEvent, Tenant, TenantSubscription, TopupPack, UsageEvent)
 
 settings = get_settings()
 
@@ -81,6 +81,10 @@ class FakeStripe:
         sid = f"cs_fake_{uuid.uuid4().hex[:16]}"
         return {"id": sid, "url": f"{settings.public_web_url}/fake-checkout?session={sid}"}
 
+    def create_topup_checkout(self, *, tenant_id: str, pack: TopupPack, success_url: str, cancel_url: str, customer_id: str | None) -> dict:
+        sid = f"cs_fake_{uuid.uuid4().hex[:16]}"
+        return {"id": sid, "url": f"{settings.public_web_url}/fake-checkout?session={sid}"}
+
     def billing_portal(self, customer_id: str, return_url: str) -> str:
         return f"{settings.public_web_url}/fake-portal"
 
@@ -112,6 +116,15 @@ class RealStripe:
             # Metadados definidos pelo SERVIDOR a partir da membership (nunca do cliente).
             "metadata[tenant_id]": tenant_id, "metadata[plan_version_id]": str(plan_version.id),
         }
+        if customer_id:
+            data["customer"] = customer_id
+        s = self._post("/checkout/sessions", data)
+        return {"id": s["id"], "url": s["url"]}
+
+    def create_topup_checkout(self, *, tenant_id, pack, success_url, cancel_url, customer_id) -> dict:
+        data = {"mode": "payment", "line_items[0][price]": pack.stripe_price_id, "line_items[0][quantity]": 1,
+                "success_url": success_url, "cancel_url": cancel_url,
+                "metadata[tenant_id]": tenant_id, "metadata[topup_pack_id]": str(pack.id)}   # definidos pelo SERVIDOR
         if customer_id:
             data["customer"] = customer_id
         s = self._post("/checkout/sessions", data)
@@ -193,7 +206,44 @@ def _ent_from_version(pv: PlanVersion) -> dict:
     return {"limits": e, "events": g["events"], "minutes": g["language_minutes"], "event_minutes": g["event_minutes"]}
 
 
+def apply_topup(db: Session, tenant_id, *, hours: int, events: int, ref: str) -> Entitlement:
+    """Soma a RECARGA ao saldo da organização.
+    - Há direito ativo (plano, teste, manual): soma horas/eventos NELE (se for ilimitado nesse item, não muda nada).
+    - Não há nenhum: cria um direito novo "topup" só com o que foi comprado (mínimo 1 evento, senão não dá para iniciar).
+    Idempotência: quem chama (webhook) já é deduplicado pelo id do evento Stripe; o ajuste manual é auditado."""
+    now = datetime.now(timezone.utc)
+    ents = [e for e in db.scalars(select(Entitlement).where(Entitlement.tenant_id == tenant_id, Entitlement.active.is_(True)))
+            if not e.expires_at or e.expires_at.replace(tzinfo=timezone.utc) > now]
+    if ents:
+        ent = max(ents, key=lambda e: (e.expires_at is None, e.created_at))   # o mais duradouro/recente
+        if hours and ent.event_minutes_remaining is not None:
+            ent.event_minutes_remaining += hours * 60
+        if events and not is_unlimited(ent.events_remaining):
+            ent.events_remaining += events
+        return ent
+    limits = {"included_events": max(events, 1), "included_hours": hours, "max_concurrent_events": 1, "overage": "hard_stop"}
+    ent = Entitlement(tenant_id=tenant_id, source="topup", source_ref=ref, limits=limits, events_remaining=max(events, 1),
+                      language_minutes_remaining=UNLIM, event_minutes_remaining=hours * 60 if hours else None)
+    db.add(ent)
+    return ent
+
+
+def _fulfill_topup(db: Session, obj: dict, meta: dict) -> str:
+    try:
+        tenant_id = uuid.UUID(meta["tenant_id"])
+        pack = db.get(TopupPack, uuid.UUID(meta["topup_pack_id"]))
+    except (KeyError, ValueError):
+        return "bad_metadata"
+    if not pack or not db.get(Tenant, tenant_id):
+        return "unknown_target"
+    apply_topup(db, tenant_id, hours=pack.hours, events=pack.events, ref=f"topup:{obj.get('id', '')}")
+    audit(db, action="billing.topup_granted", tenant_id=tenant_id, target=str(pack.id), commit=False)
+    return "topup_granted"
+
+
 def _fulfill_checkout(db: Session, obj: dict, meta: dict) -> str:
+    if "topup_pack_id" in meta:
+        return _fulfill_topup(db, obj, meta)
     try:
         tenant_id = uuid.UUID(meta["tenant_id"])
         pv = db.get(PlanVersion, uuid.UUID(meta["plan_version_id"]))

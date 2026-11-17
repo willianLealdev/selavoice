@@ -82,7 +82,7 @@ def org_profile(slug: str, db: Session = Depends(get_db)):
     since = datetime.now(timezone.utc) - timedelta(hours=12)  # agendados que já passaram um pouco ainda aparecem
     evs = db.scalars(select(Event).where(
         Event.tenant_id == t.id, Event.status.in_([EventStatus.LIVE, EventStatus.SCHEDULED]), Event.starts_at >= since,
-        Event.access_password_hash.is_(None))   # eventos PRIVADOS nunca aparecem na lista pública (só com código + senha)
+        Event.access_password_hash.is_(None), Event.deleted_at.is_(None))   # eventos PRIVADOS nunca aparecem na lista pública (só com código + senha)
         .order_by(Event.status.desc(), Event.starts_at).limit(10)).all()
     live = [e for e in evs if e.status == EventStatus.LIVE]
     rest = [e for e in evs if e.status != EventStatus.LIVE]
@@ -94,7 +94,7 @@ def org_profile(slug: str, db: Session = Depends(get_db)):
     # Só título/palestrante/data/código; a transcrição só é lida por quem abre o evento.
     history: list[dict] = []
     if (t.settings or {}).get("history_public", True):
-        past = db.scalars(select(Event).where(Event.tenant_id == t.id, Event.status == EventStatus.ENDED, Event.access_password_hash.is_(None))
+        past = db.scalars(select(Event).where(Event.tenant_id == t.id, Event.status == EventStatus.ENDED, Event.access_password_hash.is_(None), Event.deleted_at.is_(None))
                           .order_by(Event.starts_at.desc()).limit(40)).all()
         history = [_ev(e) for e in past]
     return {**_org_out(t), "contact": contact_out(t), "events": [_ev(e) for e in live + rest], "history": history}

@@ -124,3 +124,58 @@ def test_tenants_list_shows_current_plan(client, superadmin):
     assert plan() == "Sem plano"
     client.post(f"/admin/tenants/{tid}/grant-plan", json={"unlimited": True, "reason": "teste de rótulo"}, headers=superadmin)
     assert plan() == "Vitalício (manual)"
+
+
+# ---------------------------------------------------------------- recarga, editar e excluir evento
+def test_topup_packs_buy_and_manual(client, superadmin):
+    _no_trial(client, superadmin)
+    h, _ = register(client, "Recarga")
+    tid = _tenant_id(client, superadmin, h)
+    assert client.post("/admin/topups", json={"name": "x", "amount_cents": 500}, headers=superadmin).status_code == 422     # sem horas nem eventos
+    p = client.post("/admin/topups", json={"name": "+5 horas", "hours": 5, "amount_cents": 1500}, headers=superadmin).json()
+    assert client.post("/admin/topups", json={"name": "+5 horas", "hours": 5, "amount_cents": 1}, headers=h).status_code == 403
+    assert [x["name"] for x in client.get("/topups").json()] == ["+5 horas"]
+    # compra (Stripe simulado): cria direito novo "topup" (a org não tinha nada) e libera iniciar evento
+    r = client.post("/topups/checkout", json={"pack_id": p["id"]}, headers=h)
+    assert r.status_code == 200
+    assert client.post(f"/billing/fake/complete?session_id={r.json()['session_id']}", headers=h).json()["outcome"] == "topup_granted"
+    ents = client.get(f"/admin/tenants/{tid}/entitlements", headers=superadmin).json()
+    assert ents[0]["source"] == "topup" and ents[0]["event_minutes_remaining"] == 300
+    ev = make_event(client, h)
+    assert client.post(f"/events/{ev['id']}/start", headers=h).status_code == 200
+    client.post(f"/events/{ev['id']}/stop", headers=h)
+    # nova compra soma no saldo existente
+    r = client.post("/topups/checkout", json={"pack_id": p["id"]}, headers=h)
+    client.post(f"/billing/fake/complete?session_id={r.json()['session_id']}", headers=h)
+    assert max(e["event_minutes_remaining"] for e in client.get(f"/admin/tenants/{tid}/entitlements", headers=superadmin).json()) >= 600
+    # ajuste manual + arquivar pacote
+    assert client.post(f"/admin/tenants/{tid}/topup", json={"hours": 2, "reason": "cortesia de teste"}, headers=superadmin).status_code == 201
+    assert client.patch(f"/admin/topups/{p['id']}?status=archived", headers=superadmin).status_code == 200
+    assert client.get("/topups").json() == []
+    assert client.post("/topups/checkout", json={"pack_id": p["id"]}, headers=h).status_code == 404
+
+
+def test_edit_event_fields_privacy_and_limits(client, tenant_a):
+    ev = make_event(client, tenant_a, "Original")
+    r = client.patch(f"/events/{ev['id']}", json={"title": "Novo título", "original_language": "en", "private": True, "access_password": "abcd"}, headers=tenant_a)
+    assert r.status_code == 200 and r.json()["title"] == "Novo título" and r.json()["original_language"] == "en" and r.json()["private"] is True
+    assert client.get(f"/public/join/{ev['join_code']}").json()["private"] is True
+    assert client.patch(f"/events/{ev['id']}", json={"private": False}, headers=tenant_a).json()["private"] is False
+    assert client.patch(f"/events/{ev['id']}", json={"private": True}, headers=tenant_a).status_code == 422   # privado sem senha
+    client.post(f"/events/{ev['id']}/start", headers=tenant_a)
+    assert client.patch(f"/events/{ev['id']}", json={"presenter": "Maria"}, headers=tenant_a).status_code == 200   # texto pode ao vivo
+    assert client.patch(f"/events/{ev['id']}", json={"original_language": "es"}, headers=tenant_a).status_code == 409   # idioma não
+    client.post(f"/events/{ev['id']}/stop", headers=tenant_a)
+
+
+def test_delete_event_hides_it_everywhere(client, tenant_a, tenant_b):
+    ev = make_event(client, tenant_a, "Apagar")
+    code = ev["join_code"]
+    assert client.delete(f"/events/{ev['id']}", headers=tenant_b).status_code == 404         # outra organização: 404
+    client.post(f"/events/{ev['id']}/start", headers=tenant_a)
+    assert client.delete(f"/events/{ev['id']}", headers=tenant_a).status_code == 409         # ao vivo: encerre antes
+    client.post(f"/events/{ev['id']}/stop", headers=tenant_a)
+    assert client.delete(f"/events/{ev['id']}", headers=tenant_a).status_code == 200
+    assert ev["id"] not in [e["id"] for e in client.get("/events", headers=tenant_a).json()]
+    assert client.get(f"/events/{ev['id']}", headers=tenant_a).status_code == 404
+    assert client.get(f"/public/join/{code}").status_code == 404

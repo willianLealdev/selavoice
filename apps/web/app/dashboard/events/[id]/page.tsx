@@ -19,6 +19,8 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [token, setToken] = useState("");
   const [text, setText] = useState("");
   const [doc, setDoc] = useState<any>(null);
+  const [edit, setEdit] = useState<any>(null);   // formulário de edição (null = fechado)
+  const [pw, setPw] = useState("");
   const [use_, setUse] = useState<any>(null);  // horas de transmissão (contam desde o início)
 
   const load = useCallback(async () => {
@@ -35,6 +37,22 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const act = async (fn: () => Promise<any>, ok: string) => {
     try { await fn(); setMsg({ t: "ok", m: ok }); await load(); } catch (e: any) { setMsg({ t: "err", m: e.message }); }
   };
+  function openEdit() {
+    const d = new Date(ev.starts_at); const loc = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    setPw(""); setEdit({ title: ev.title, presenter: ev.presenter, theme: ev.theme, description: ev.description, starts_at: loc, original_language: ev.original_language, type: ev.type, private: !!ev.private });
+  }
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    const body: any = { title: edit.title, presenter: edit.presenter, theme: edit.theme, description: edit.description, private: edit.private };
+    if (edit.private && pw) body.access_password = pw;
+    if (ev.status === "SCHEDULED") { body.starts_at = new Date(edit.starts_at).toISOString(); body.original_language = edit.original_language; body.type = edit.type; }
+    await act(() => api(`/events/${id}`, { method: "PATCH", json: body }), "Evento atualizado.");
+    setEdit(null);
+  }
+  async function remove() {
+    if (!confirm(`${t("Excluir este evento?")} “${ev.title}”\n${t("Ele some da lista e do público. Isso não pode ser desfeito.")}`)) return;
+    try { await api(`/events/${id}`, { method: "DELETE" }); location.href = "/dashboard"; } catch (e: any) { setMsg({ t: "err", m: e.message }); }
+  }
   if (!ev) return <p>{t("Carregando…")}</p>;
   const url = `${location.origin}/e/${ev.join_code}`;
   const sid = ev.sessions[0]?.id;
@@ -44,6 +62,28 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     <>
       <div className="row spread"><h1>{ev.title}</h1><span className={`pill ${ev.status}`}>{t(st[ev.status] ?? ev.status)}</span></div>
       {msg && <div className={msg.t === "ok" ? "ok" : "err"}>{t(msg.m)}</div>}
+      <div className="row" style={{ marginBottom: 12 }}>
+        {ev.status !== "CANCELED" && <button className="btn btn-ghost btn-sm" onClick={() => (edit ? setEdit(null) : openEdit())}>{edit ? t("Fechar edição") : t("Editar evento")}</button>}
+        {ev.status !== "LIVE" && <button className="btn btn-ghost btn-sm" onClick={remove}>{t("Excluir evento")}</button>}
+      </div>
+      {edit && (
+        <form className="card" onSubmit={saveEdit} style={{ marginBottom: 20 }}>
+          <h3>{t("Editar evento")}</h3>
+          {ev.status !== "SCHEDULED" && <p className="fine">{t("Com o evento em andamento ou encerrado, só dá para mudar título, palestrante, tema, descrição e privacidade.")}</p>}
+          <div className="grid-2">
+            <div><label>{t("Título")}</label><input required value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} /></div>
+            <div><label>{t("Palestrante")}</label><input value={edit.presenter} onChange={(e) => setEdit({ ...edit, presenter: e.target.value })} /></div>
+            <div><label>{t("Tema")}</label><input value={edit.theme} onChange={(e) => setEdit({ ...edit, theme: e.target.value })} /></div>
+            {ev.status === "SCHEDULED" && <div><label>{t("Data e hora")}</label><input type="datetime-local" required value={edit.starts_at} onChange={(e) => setEdit({ ...edit, starts_at: e.target.value })} /></div>}
+            {ev.status === "SCHEDULED" && <div><label>{t("Idioma original da fala")}</label>
+              <select value={edit.original_language} onChange={(e) => setEdit({ ...edit, original_language: e.target.value })}><option value="pt">Português</option><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="it">Italiano</option><option value="zh">中文</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="ar">العربية</option><option value="ru">Русский</option></select></div>}
+          </div>
+          <label>{t("Descrição")}</label><textarea rows={3} value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
+          <label className="pf-check" style={{ marginTop: 10 }}><input type="checkbox" checked={edit.private} onChange={(e) => setEdit({ ...edit, private: e.target.checked })} /> {t("Evento privado (só entra quem tem a senha)")}</label>
+          {edit.private && <div style={{ maxWidth: 360 }}><label>{ev.private ? t("Nova senha (deixe vazio para manter a atual)") : t("Senha do evento")}</label><input minLength={4} maxLength={60} required={!ev.private} value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="off" /></div>}
+          <button className="btn btn-primary" style={{ marginTop: 14 }}>{t("Salvar alterações")}</button>
+        </form>
+      )}
       <div className="grid-2">
         <div className="card">
           <h3>{t("Controle")}</h3>

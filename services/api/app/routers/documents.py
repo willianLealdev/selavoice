@@ -175,7 +175,7 @@ public_router = APIRouter(prefix="/public/booklets", tags=["public"])
 @public_router.get("/{code}")
 def public_list(code: str, db: Session = Depends(get_db)):
     """Lista apostilas PUBLICADAS do evento (rascunho/aprovado-não-publicado nunca aparece)."""
-    ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
+    ev = db.scalar(select(Event).where(Event.join_code == code.lower(), Event.deleted_at.is_(None)))
     if not ev or ev.access_password_hash:   # privado: sem apostilas públicas
         raise HTTPException(404)
     docs = db.scalars(select(Document).where(Document.event_id == ev.id, Document.status == DocStatus.PUBLISHED)).all()

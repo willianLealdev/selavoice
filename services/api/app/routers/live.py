@@ -51,7 +51,7 @@ def _plan_languages(langs: list[dict], ev: Event, db: Session) -> list[dict]:
 # ---------------- Público ----------------
 @router.get("/public/join/{code}", dependencies=[Depends(_pub_limit)])
 async def public_join(code: str, db: Session = Depends(get_db), x_event_password: str | None = Header(default=None)):
-    ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
+    ev = db.scalar(select(Event).where(Event.join_code == code.lower(), Event.deleted_at.is_(None)))
     if not ev or ev.status == EventStatus.CANCELED:
         raise HTTPException(404, "Evento não encontrado.")
     from ..models import Tenant
@@ -77,7 +77,7 @@ class JoinIn(BaseModel):
 @router.post("/public/join/{code}/token", dependencies=[Depends(rate_limit("listener_token", 30))])
 def listener_token(code: str, body: JoinIn | None = None, db: Session = Depends(get_db),
                    _slow: None = Depends(rate_limit("join_password", 10))):
-    ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
+    ev = db.scalar(select(Event).where(Event.join_code == code.lower(), Event.deleted_at.is_(None)))
     if not ev or ev.status == EventStatus.CANCELED or not ev.sessions:
         raise HTTPException(404, "Evento não encontrado.")
     # Evento privado: o token só sai com a senha certa (limite de 10 tentativas/min por IP contra adivinhação).

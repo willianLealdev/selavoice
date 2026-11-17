@@ -16,7 +16,7 @@ from ..audit import audit
 from ..config import get_settings
 from ..db import get_db, scoped
 from ..deps import Ctx, require_admin, require_member
-from ..models import Entitlement, Plan, PlanVersion, Tenant, UsageEvent
+from ..models import Entitlement, Plan, PlanVersion, Tenant, TopupPack, UsageEvent
 from ..services.billing import (stripe_mode, webhook_secret, credit_balance, get_stripe, minutes_remaining, process_webhook,
                                 stripe_signature, usage_minutes_used, verify_stripe_signature)
 
@@ -62,6 +62,40 @@ def checkout(body: CheckoutIn, ctx: Ctx = Depends(require_admin), db: Session = 
     return {"checkout_url": s["url"], "session_id": s["id"]}
 
 
+@router.get("/topups")
+def public_topups(db: Session = Depends(get_db)):
+    """Pacotes de recarga à venda (o cliente compra quando o saldo acaba antes do fim do período)."""
+    return [{"id": str(p.id), "name": p.name, "hours": p.hours, "events": p.events, "amount_cents": p.amount_cents, "currency": p.currency}
+            for p in db.scalars(select(TopupPack).where(TopupPack.status == "published").order_by(TopupPack.amount_cents))]
+
+
+class TopupCheckoutIn(BaseModel):
+    pack_id: UUID
+
+
+@router.post("/topups/checkout")
+def topup_checkout(body: TopupCheckoutIn, ctx: Ctx = Depends(require_admin), db: Session = Depends(get_db)):
+    pack = db.get(TopupPack, body.pack_id)
+    if not pack or pack.status != "published":
+        raise HTTPException(404, "Pacote não disponível.")
+    tenant = db.get(Tenant, ctx.tenant_id)   # a organização vem da membership, nunca do corpo
+    stripe = get_stripe()
+    if not pack.stripe_price_id:             # o preço no Stripe é criado na 1ª compra (precisa da chave salva no painel)
+        try:
+            pack.stripe_price_id = stripe.create_price(f"Recarga {pack.name}", pack.amount_cents, pack.currency, False)
+            db.commit()
+        except Exception:
+            raise HTTPException(503, "Pagamento indisponível no momento (Stripe não configurado).")
+    s = stripe.create_topup_checkout(
+        tenant_id=str(ctx.tenant_id), pack=pack, customer_id=tenant.stripe_customer_id,
+        success_url=f"{settings.public_web_url}/dashboard/billing?status=processing",
+        cancel_url=f"{settings.public_web_url}/dashboard/billing?status=canceled")
+    if stripe_mode() == "fake":
+        _FAKE_SESSIONS[s["id"]] = {"tenant_id": str(ctx.tenant_id), "topup_pack_id": str(pack.id), "recurring": False}
+    audit(db, action="billing.topup_checkout_created", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=s["id"], ip=ctx.ip)
+    return {"checkout_url": s["url"], "session_id": s["id"]}
+
+
 @router.post("/billing/portal")
 def portal(ctx: Ctx = Depends(require_admin), db: Session = Depends(get_db)):
     tenant = db.get(Tenant, ctx.tenant_id)
@@ -95,7 +129,8 @@ async def fake_complete(session_id: str, request: Request, ctx: Ctx = Depends(re
         raise HTTPException(404, "Sessão não encontrada.")
     event = {"id": f"evt_fake_{session_id}", "type": "checkout.session.completed", "data": {"object": {
         "id": session_id, "payment_status": "paid", "subscription": f"sub_fake_{session_id}" if info["recurring"] else None,
-        "metadata": {"tenant_id": info["tenant_id"], "plan_version_id": info["plan_version_id"]}}}}
+        "metadata": ({"tenant_id": info["tenant_id"], "topup_pack_id": info["topup_pack_id"]} if "topup_pack_id" in info
+                     else {"tenant_id": info["tenant_id"], "plan_version_id": info["plan_version_id"]})}}}
     payload = json.dumps(event).encode()
     assert verify_stripe_signature(payload, stripe_signature(payload, webhook_secret()),
                                    webhook_secret(), settings.stripe_tolerance_seconds)

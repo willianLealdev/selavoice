@@ -117,3 +117,7 @@ Python 3.12 em `services/api/.venv`; Node 24; sem Docker; SQLite. Senhas de demo
 - **Logo**: `logo.webp` agora com fundo transparente + `color-scheme: light` (Safari escuro não escurece mais o site).
 - Testes: 128 passando.
 - **Horas do plano só com fala** (decisão do dono): `events.active_seconds` (migração 0007) alimentado por `channels._touch_active`/`take_speech` e gravado pelo relógio; `charge`/`limit_reached` usam `speech_minutes`. Silêncio e pausas não gastam horas; o teto `max_event_hours` também conta só fala. `/events/{id}/usage` traz `speech_minutes`.
+- **Recargas** (`topup_packs`, migração 0008): admin cria pacotes (horas e/ou eventos, preço) em /admin/recargas; cliente compra em /dashboard/billing (`GET /topups`, `POST /topups/checkout`, webhook com `metadata.topup_pack_id` -> `apply_topup` soma no direito ativo ou cria um `topup`). Ajuste manual: `POST /admin/tenants/{id}/topup`. Stripe real nunca testado (preço criado na 1ª compra).
+- **Editar evento**: `PATCH /events/{id}` aceita título/palestrante/tema/descrição/privacidade em qualquer estado (exceto cancelado); idioma/tipo/data/gravação só AGENDADO.
+- **Excluir evento**: `DELETE /events/{id}` (exclusão lógica `events.deleted_at`, migração 0009; ao vivo = 409; some das listas e do público). Lista do painel: abas "Próximos e ao vivo" x "Histórico" (encerrados/cancelados).
+- Testes: 133 passando. Não verificado em navegador nesta rodada.
