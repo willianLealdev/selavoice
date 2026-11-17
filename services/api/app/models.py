@@ -378,6 +378,13 @@ class AuditLog(_Mixin, Base):
     meta: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+class PlatformSetting(_Mixin, Base):
+    """Configurações da plataforma editáveis no painel (ex.: o teste grátis). Chave -> valor JSON."""
+    __tablename__ = "platform_settings"
+    key: Mapped[str] = mapped_column(String(60), unique=True, index=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class Notification(_Mixin, Base):
     __tablename__ = "notifications"
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), index=True)

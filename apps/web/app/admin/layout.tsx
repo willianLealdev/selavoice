@@ -52,6 +52,7 @@ function Frame({ children }: { children: React.ReactNode }) {
         {item("/admin/organizacoes", "building", t("Organizações"))}
         <div className="side-sec">{t("Plataforma")}</div>
         {item("/admin/planos", "doc", t("Planos"))}
+        {item("/admin/teste-gratis", "check", t("Teste grátis"))}
         {item("/admin/provedores", "zap", t("Provedores de IA"))}
         {item("/admin/integrations", "key", t("Chaves e integrações"))}
         {item("/admin/auditoria", "shield", t("Auditoria"))}

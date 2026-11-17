@@ -398,3 +398,8 @@ html { overscroll-behavior-y: none; } body { -webkit-tap-highlight-color: transp
 /* aviso pós-cadastro: confirme o e-mail */
 .check-mail { text-align: center; padding: 8px 0 4px; } .cm-ic { width: 72px; height: 72px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; margin: 0 auto 14px; border: 1px solid #cfe0fb; }
 .cm-ic .icon { width: 32px; height: 32px; } .cm-lead { font-size: 1.0625rem; color: var(--ink); margin: 0; overflow-wrap: anywhere; }
+
+/* faixa do teste grátis na seção de preços */
+.trial-banner { display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap; background: var(--brand-soft); border: 1px solid #cfe0fb; border-radius: 18px; padding: 24px 28px; margin-bottom: 24px; }
+.trial-banner h3 { font-size: 1.375rem; margin: 6px 0 10px; } .trial-banner ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 22px; color: var(--text); font-size: .9375rem; }
+.trial-banner li { display: inline-flex; gap: 8px; align-items: center; } .trial-banner .icon { color: var(--ok); } .trial-banner .fine { margin: 10px 0 0; }

@@ -7,10 +7,12 @@ import Icon from "@/components/Icon";
 import ResendVerification from "@/components/ResendVerification";
 import { api, setToken } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n";
+import { trialHeadline, useTrial } from "@/lib/trial";
 
 export default function Register() {
   const t = useT();
   const { lang } = useLang();
+  const trial = useTrial();
   const router = useRouter();
   const [f, setF] = useState({ name: "", email: "", password: "", org_name: "", org_type: "corporate" });
   const [err, setErr] = useState("");
@@ -48,7 +50,7 @@ export default function Register() {
     </AuthShell>
   );
   return (
-    <AuthShell title={t("Criar conta da organização")} subtitle={t("Você ganha 1 evento de teste. Sem cartão de crédito.")}>
+    <AuthShell title={t("Criar conta da organização")} subtitle={trial.ready && trial.enabled ? t("Você ganha um teste grátis: {resumo}. Sem cartão de crédito.", { resumo: trialHeadline(trial.limits, t as any) }) : t("Crie a conta da sua organização.")}>
       <form onSubmit={submit}>
         <label htmlFor="n">{t("Seu nome")}</label>
         <input id="n" required autoComplete="name" value={f.name} onChange={set("name")} />

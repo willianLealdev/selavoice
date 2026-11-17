@@ -25,6 +25,13 @@ lang_router = APIRouter(prefix="/public", tags=["public"], dependencies=[Depends
 router = APIRouter(prefix="/public/orgs", tags=["public"], dependencies=[Depends(rate_limit("pubdir", 60))])
 
 
+@lang_router.get("/trial")
+def public_trial(db: Session = Depends(get_db)):
+    """Teste grátis que a landing e o cadastro exibem. Vem do painel do Super Admin (nada fixo no site)."""
+    from ..services.platform_settings import get_trial
+    return get_trial(db)
+
+
 @lang_router.get("/languages")
 async def languages():
     """Idiomas de tradução disponíveis AGORA (vêm dos provedores configurados; nada fixo no código)."""

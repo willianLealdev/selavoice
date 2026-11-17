@@ -9,9 +9,12 @@ import Icon from "@/components/Icon";
 import LiveDemo from "./LiveDemo";
 import Pricing from "./Pricing";
 import { LangSwitch, useT } from "@/lib/i18n";
+import { trialHeadline, useTrial } from "@/lib/trial";
 
 export default function Landing() {
   const t = useT();
+  const trial = useTrial();   // o teste grátis é configurado no painel do dono: a landing só reflete
+  const head = trialHeadline(trial.limits, t as any);
   const SEGMENTS: [string, string][] = [
     ["landmark", "Conferências e congressos"], ["store", "Feiras e expos"], ["briefcase", "Empresas e treinamentos"],
     ["graduation", "Escolas e universidades"], ["users", "Associações e comunidades"], ["building", "Igrejas e templos"],
@@ -31,7 +34,6 @@ export default function Landing() {
     ["E se o provedor de IA falhar durante o evento?", "O sistema troca automaticamente de provedor apenas no idioma afetado, avisa o público e registra tudo. Os outros idiomas não são interrompidos."],
     ["O público precisa criar conta?", "Não. Ele escaneia o QR do evento ou do perfil da organização, ou busca pelo nome. Só a organização (quem promove o evento) tem conta, criada no site."],
     ["Meus dados ficam seguros?", "Sim. Isolamento total entre organizações, criptografia de segredos, links assinados, auditoria e autenticação em dois fatores para administradores da plataforma."],
-    ["Posso testar de graça?", "Sim. Ao criar a conta você ganha um evento de teste, sem cartão de crédito."],
   ];
   const li = (s: string) => <li><Icon name="check" /> <span>{t(s)}</span></li>;
 
@@ -50,7 +52,7 @@ export default function Landing() {
             <InstallApp className="btn btn-ghost btn-sm hide-m" />
             {/* "Entrar" leva à tela que pergunta: ouvinte ou palestrante (o palestrante segue para o login) */}
             <Link className="btn btn-ghost btn-sm" href="/app">{t("Entrar")}</Link>
-            <Link className="btn btn-primary btn-sm hide-xs" href="/register">{t("Começar grátis")}</Link>
+            <Link className="btn btn-primary btn-sm hide-xs" href="/register">{trial.enabled ? t("Começar grátis") : t("Criar conta")}</Link>
           </nav>
         </div>
       </header>
@@ -63,12 +65,12 @@ export default function Landing() {
               <h1 className="display">{t("Seu evento, entendido por todos,")} <em>{t("em qualquer idioma.")}</em></h1>
               <p className="lead">{t("O SelaVoice traduz a fala do palco em tempo real. Cada pessoa escolhe o idioma, ouve a tradução em voz e acompanha a transcrição, no celular ou no computador.")}</p>
               <div className="row">
-                <Link className="btn btn-primary btn-lg" href="/register">{t("Criar conta grátis")} <Icon name="arrow" small /></Link>
+                <Link className="btn btn-primary btn-lg" href="/register">{trial.enabled ? t("Criar conta grátis") : t("Criar conta")} <Icon name="arrow" small /></Link>
                 <Link className="btn btn-ghost btn-lg" href="/buscar"><Icon name="search" small /> {t("Encontrar um evento")}</Link>
               </div>
               <div className="checks">
                 <span><Icon name="check" /> {t("Sem cartão de crédito")}</span>
-                <span><Icon name="check" /> {t("Evento de teste incluso")}</span>
+                {trial.ready && trial.enabled && <span><Icon name="check" /> {t("Teste grátis")}: {head}</span>}
                 <span><Icon name="check" /> {t("O público não precisa de conta")}</span>
               </div>
             </div>
@@ -157,13 +159,16 @@ export default function Landing() {
           <div className="container" style={{ maxWidth: 800 }}>
             <div className="sec-head"><h2>{t("Perguntas frequentes")}</h2></div>
             {FAQ.map(([q, a]) => (<details key={q}><summary>{t(q)}</summary><p>{t(a)}</p></details>))}
+            {trial.ready && <details><summary>{t("Posso testar de graça?")}</summary><p>{trial.enabled
+              ? t("Sim. Ao criar a conta você ganha um teste grátis: {resumo}, sem cartão de crédito.", { resumo: head })
+              : t("No momento não temos teste grátis. Veja os planos acima: há opção de evento avulso.")}</p></details>}
           </div>
         </section>
 
         <section className="band">
           <div className="container row spread" style={{ gap: 32 }}>
-            <div style={{ maxWidth: 620 }}><h2>{t("Seu próximo evento pode ser entendido por todos.")}</h2><p style={{ margin: 0 }}>{t("Crie a conta da sua organização e faça o primeiro evento de teste hoje.")}</p></div>
-            <Link className="btn btn-light btn-lg" href="/register">{t("Começar agora, é grátis")} <Icon name="arrow" small /></Link>
+            <div style={{ maxWidth: 620 }}><h2>{t("Seu próximo evento pode ser entendido por todos.")}</h2><p style={{ margin: 0 }}>{trial.enabled ? t("Crie a conta da sua organização e faça o primeiro evento de teste hoje.") : t("Crie a conta da sua organização e escolha o plano ideal para o seu evento.")}</p></div>
+            <Link className="btn btn-light btn-lg" href="/register">{trial.enabled ? t("Começar agora, é grátis") : t("Criar conta")} <Icon name="arrow" small /></Link>
           </div>
         </section>
       </main>

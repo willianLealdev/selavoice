@@ -346,3 +346,30 @@ def test_integration(name: str, request: Request, su: User = Depends(require_sup
     audit(db, action="admin.integration_test", actor_id=su.id, actor_role="SUPER_ADMIN", target=name,
           ip=client_ip(request), meta={"ok": ok})
     return {"ok": ok, "detail": msg}
+
+
+# ---------------- Teste grátis (configurável pelo dono) ----------------
+from ..services.platform_settings import get_trial as _get_trial, set_trial as _set_trial
+
+
+class TrialIn(BaseModel):
+    enabled: bool
+    days: int | None = Field(default=None, ge=1, le=3650)   # None = o teste não expira
+    limits: dict = Field(default_factory=dict)
+
+
+@router.get("/trial")
+def trial_get(_: User = Depends(require_super), db: Session = Depends(get_db)):
+    return _get_trial(db)
+
+
+@router.put("/trial")
+def trial_put(body: TrialIn, request: Request, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    """Define o teste grátis das PRÓXIMAS contas (quem já tem teste não muda). Validação igual à de um plano."""
+    try:
+        cfg = _set_trial(db, enabled=body.enabled, days=body.days, limits=body.limits)
+    except PlanError as e:
+        raise HTTPException(422, str(e))
+    audit(db, action="admin.trial_update", actor_id=su.id, actor_role="SUPER_ADMIN", ip=client_ip(request),
+          meta={"enabled": cfg["enabled"], "days": cfg["days"]})
+    return cfg

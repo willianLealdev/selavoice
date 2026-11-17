@@ -22,24 +22,27 @@ from sqlalchemy.orm import Session
 from ..audit import audit
 from ..config import get_settings
 from .plan_schema import UNLIM, grant_amounts, is_unlimited, limit as plan_limit, max_event_minutes
+from .platform_settings import get_trial
 from .secrets_store import get_secret
 from ..models import (BillingType, CreditLedger, Entitlement, Event, EventStatus, OneOffPurchase,
                       PlanVersion, StripeWebhookEvent, Tenant, TenantSubscription, UsageEvent)
 
 settings = get_settings()
 
-# Teste grátis inicial concedido no cadastro (não envolve pagamento).
-TRIAL_LIMITS = {"included_events": 1, "included_hours": 1, "max_event_hours": 1, "included_language_minutes": 60,
-                "max_languages": 2, "listener_concurrency": 25, "max_concurrent_events": 1,
-                "recordings": False, "pdf_booklets": True, "overage": "hard_stop"}
-
-
 def grant_trial(db: Session, tenant_id) -> None:
+    """Concede o TESTE GRÁTIS conforme a configuração do painel (Super Admin > Teste grátis). Desligado = não concede.
+    Idempotente por organização. Não envolve pagamento."""
+    cfg = get_trial(db)
+    if not cfg["enabled"]:
+        return
     ref = str(tenant_id)
     if db.scalar(select(Entitlement).where(Entitlement.source == "trial", Entitlement.source_ref == ref)):
         return
-    db.add(Entitlement(tenant_id=tenant_id, source="trial", source_ref=ref, limits=TRIAL_LIMITS,
-                       events_remaining=1, language_minutes_remaining=60, event_minutes_remaining=60))
+    limits = cfg["limits"]
+    g = grant_amounts(limits)
+    expires = datetime.now(timezone.utc) + timedelta(days=cfg["days"]) if cfg["days"] else None
+    db.add(Entitlement(tenant_id=tenant_id, source="trial", source_ref=ref, limits=limits, events_remaining=g["events"],
+                       language_minutes_remaining=g["language_minutes"], event_minutes_remaining=g["event_minutes"], expires_at=expires))
     db.commit()
 
 

@@ -8,78 +8,43 @@
 import { useEffect, useMemo, useState } from "react";
 import { PageHead, Panel } from "@/components/AdminUI";
 import Icon from "@/components/Icon";
-import { langName } from "@/components/LanguagePicker";
+import { blankLimits, LimitsFields, limitsFromEnt, limitsToEnt, type LimitsForm } from "@/components/LimitsEditor";
 import { api, money } from "@/lib/api";
-import { useLang, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { countsHours, planLines } from "@/lib/plans";
 
-type Num = { u: boolean; v: string };                       // u = ilimitado
-const N = (v: string | number, u = false): Num => ({ u, v: String(v) });
-type Form = {
-  planId?: string; name: string; slug: string; description: string; status: string; billing: "MONTHLY" | "ONE_OFF"; price: string;
-  hours: Num; maxEventHours: Num; extraHour: string; listeners: Num; seats: Num; concurrent: Num; langs: Num; langMinutes: Num;
-  events: Num; retention: Num; allowAll: boolean; allowed: string[]; recordings: boolean; pdf: boolean; overage: "hard_stop" | "topup";
+type Form = LimitsForm & {
+  planId?: string; name: string; slug: string; description: string; status: string; billing: "MONTHLY" | "ONE_OFF"; price: string; extraHour: string;
 };
 
-const blank = (billing: "MONTHLY" | "ONE_OFF"): Form => billing === "ONE_OFF" ? {
-  name: "", slug: "", description: "", status: "draft", billing, price: "149", hours: N(4), maxEventHours: N(4), extraHour: "", listeners: N(300), seats: N(2), concurrent: N(1),
-  langs: N(3), langMinutes: N(600), events: N(1), retention: N(90), allowAll: true, allowed: [], recordings: true, pdf: true, overage: "hard_stop",
-} : {
-  name: "", slug: "", description: "", status: "draft", billing, price: "299", hours: N(20), maxEventHours: N(6), extraHour: "", listeners: N(500), seats: N(5), concurrent: N(1),
-  langs: N(5), langMinutes: N(2400), events: N(8), retention: N(180), allowAll: true, allowed: [], recordings: true, pdf: true, overage: "topup",
-};
+const blank = (billing: "MONTHLY" | "ONE_OFF"): Form => ({
+  name: "", slug: "", description: "", status: "draft", billing, price: billing === "ONE_OFF" ? "149" : "299", extraHour: "", ...blankLimits(billing),
+});
 
-/** Converte os limites salvos num formulário (chave ausente de plano antigo = ilimitado, exceto eventos). */
+/** Plano salvo -> formulário. */
 function fromVersion(p: any, v: any): Form {
   const e = v.entitlements ?? {};
-  const g = (k: string, d: number | null): Num => (k in e ? (e[k] === null ? N("", true) : N(e[k])) : d === null ? N("", true) : N(d));
-  const maxH: Num = "max_event_hours" in e ? g("max_event_hours", null) : "max_event_minutes" in e ? (e.max_event_minutes === null ? N("", true) : N(e.max_event_minutes / 60)) : N("", true);
   return {
     planId: p.id, name: p.name, slug: p.slug, description: p.description ?? "", status: p.status, billing: v.billing_type, price: String(v.amount_cents / 100),
-    hours: g("included_hours", null), maxEventHours: maxH, extraHour: e.extra_hour_cents ? String(e.extra_hour_cents / 100) : "", listeners: g("listener_concurrency", null),
-    seats: g("admin_seats", null), concurrent: g("max_concurrent_events", 1), langs: g("max_languages", null), langMinutes: g("included_language_minutes", 0), events: g("included_events", 1),
-    retention: g("retention_days", null), allowAll: !(e.allowed_languages?.length), allowed: e.allowed_languages ?? [], recordings: !!e.recordings, pdf: !!e.pdf_booklets, overage: e.overage === "topup" ? "topup" : "hard_stop",
+    extraHour: e.extra_hour_cents ? String(e.extra_hour_cents / 100) : "", ...limitsFromEnt(e),
   };
 }
 
-const num = (x: Num) => (x.u ? null : Math.max(0, Number(String(x.v).replace(",", ".")) || 0));
+/** Formulário -> limites do plano (inclui o preço da hora extra, que só existe em planos). */
 function toLimits(f: Form) {
-  return {
-    included_events: num(f.events), included_hours: num(f.hours), max_event_hours: num(f.maxEventHours),
-    extra_hour_cents: f.extraHour ? Math.round(Number(f.extraHour.replace(",", ".")) * 100) : null,
-    listener_concurrency: num(f.listeners), admin_seats: num(f.seats), max_concurrent_events: num(f.concurrent),
-    max_languages: num(f.langs), included_language_minutes: num(f.langMinutes), allowed_languages: f.allowAll ? [] : f.allowed,
-    recordings: f.recordings, pdf_booklets: f.pdf, retention_days: num(f.retention), overage: f.overage,
-  };
-}
-
-function Field({ label, hint, value, onChange, unit, unlimitedLabel }: { label: string; hint?: string; value: Num; onChange: (n: Num) => void; unit?: string; unlimitedLabel: string }) {
-  return (
-    <div className="pf">
-      <label>{label}</label>
-      <div className="pf-row">
-        <input inputMode="decimal" disabled={value.u} value={value.u ? "" : value.v} placeholder={value.u ? "∞" : "0"} onChange={(e) => onChange({ ...value, v: e.target.value })} />
-        {unit && <span className="fine">{unit}</span>}
-        <label className="pf-inf"><input type="checkbox" checked={value.u} onChange={(e) => onChange({ ...value, u: e.target.checked })} /> {unlimitedLabel}</label>
-      </div>
-      {hint && <p className="fine">{hint}</p>}
-    </div>
-  );
+  return { ...limitsToEnt(f), extra_hour_cents: f.extraHour ? Math.round(Number(f.extraHour.replace(",", ".")) * 100) : null };
 }
 
 export default function Planos() {
   const t = useT();
-  const { lang } = useLang();
   const [plans, setPlans] = useState<any[]>([]); const [err, setErr] = useState(""); const [ok, setOk] = useState("");
   const [f, setF] = useState<Form | null>(null); const [saving, setSaving] = useState(false);
-  const [all, setAll] = useState<{ code: string }[]>([]); const [q, setQ] = useState("");
+  const [all, setAll] = useState<{ code: string }[]>([]);
   const load = () => api("/admin/plans").then(setPlans).catch((e) => setErr(e.message));
   useEffect(() => { load(); api("/public/languages").then(setAll).catch(() => {}); }, []);
   const set = (p: Partial<Form>) => setF((x) => (x ? { ...x, ...p } : x));
-  const inf = t("Ilimitado");
 
   const preview = useMemo(() => (f ? planLines(toLimits(f), t as any, (c) => money(c, "usd")) : []), [f, t]);
-  const langList = all.filter((l) => !q.trim() || langName(l.code, lang).toLowerCase().includes(q.trim().toLowerCase()) || l.code.startsWith(q.trim().toLowerCase()));
 
   async function save() {
     if (!f) return; setErr(""); setOk(""); setSaving(true);
@@ -129,58 +94,7 @@ export default function Planos() {
                 <div className="pf"><label>{t("Hora extra (US$) — opcional")}</label><input inputMode="decimal" value={f.extraHour} placeholder="—" onChange={(e) => set({ extraHour: e.target.value })} /><p className="fine">{t("Informativo: o sistema mostra o valor, mas ainda não cobra horas extras automaticamente.")}</p></div>
               </div>
 
-              <h4 className="pf-sec">{t("Horas de transmissão")}</h4>
-              <p className="fine" style={{ marginTop: -6 }}>{t("As horas começam a contar quando a transmissão é INICIADA, e não quando o evento é agendado.")}</p>
-              <div className="pf-grid">
-                <Field label={f.billing === "MONTHLY" ? t("Horas incluídas por mês") : t("Horas incluídas na compra")} value={f.hours} onChange={(v) => set({ hours: v })} unit="h" unlimitedLabel={inf} />
-                <Field label={t("Limite de horas por evento")} hint={t("Ao atingir, o evento é encerrado automaticamente.")} value={f.maxEventHours} onChange={(v) => set({ maxEventHours: v })} unit="h" unlimitedLabel={t("Sem limite")} />
-              </div>
-
-              <h4 className="pf-sec">{t("Pessoas")}</h4>
-              <div className="pf-grid">
-                <Field label={t("Ouvintes simultâneos por evento")} value={f.listeners} onChange={(v) => set({ listeners: v })} unlimitedLabel={inf} />
-                <Field label={t("Pessoas na equipe (administradores/operadores)")} value={f.seats} onChange={(v) => set({ seats: v })} unlimitedLabel={inf} />
-                <Field label={t("Eventos ao vivo ao mesmo tempo")} value={f.concurrent} onChange={(v) => set({ concurrent: v })} unlimitedLabel={inf} />
-              </div>
-
-              <h4 className="pf-sec">{t("Eventos")}</h4>
-              <div className="pf-grid"><Field label={f.billing === "MONTHLY" ? t("Eventos incluídos por mês") : t("Eventos incluídos na compra")} value={f.events} onChange={(v) => set({ events: v })} unlimitedLabel={inf} /></div>
-
-              <h4 className="pf-sec">{t("Idiomas")}</h4>
-              <div className="pf-grid">
-                <Field label={t("Idiomas simultâneos por evento")} hint={t("Quantos idiomas diferentes podem estar sendo ouvidos ao mesmo tempo.")} value={f.langs} onChange={(v) => set({ langs: v })} unlimitedLabel={inf} />
-                <Field label={t("Minutos-idioma incluídos")} hint={t("1 idioma ouvido por 1 minuto = 1.")} value={f.langMinutes} onChange={(v) => set({ langMinutes: v })} unlimitedLabel={inf} />
-              </div>
-              <div className="pf">
-                <label>{t("Quais idiomas o plano permite")}</label>
-                <div className="choice small">
-                  <button type="button" className={f.allowAll ? "on" : ""} onClick={() => set({ allowAll: true })}><b>{t("Todos os disponíveis")}</b></button>
-                  <button type="button" className={!f.allowAll ? "on" : ""} onClick={() => set({ allowAll: false })}><b>{t("Somente os escolhidos")}</b></button>
-                </div>
-                {!f.allowAll && (
-                  <div className="lang-pick">
-                    <input placeholder={t("Buscar idioma…")} value={q} onChange={(e) => setQ(e.target.value)} />
-                    <div className="chips">
-                      {langList.map((l) => {
-                        const on = f.allowed.includes(l.code);
-                        return <button type="button" key={l.code} className={`chip-lang pick ${on ? "v" : ""}`} onClick={() => set({ allowed: on ? f.allowed.filter((c) => c !== l.code) : [...f.allowed, l.code] })}>{langName(l.code, lang)}</button>;
-                      })}
-                    </div>
-                    <p className="fine">{f.allowed.length} {t("idiomas escolhidos")}</p>
-                  </div>
-                )}
-              </div>
-
-              <h4 className="pf-sec">{t("Recursos e retenção")}</h4>
-              <div className="pf-grid">
-                <label className="pf-check"><input type="checkbox" checked={f.recordings} onChange={(e) => set({ recordings: e.target.checked })} /> {t("Gravação do evento")}</label>
-                <label className="pf-check"><input type="checkbox" checked={f.pdf} onChange={(e) => set({ pdf: e.target.checked })} /> {t("Documento pós-evento em PDF")}</label>
-                <Field label={t("Guardar histórico por (dias)")} value={f.retention} onChange={(v) => set({ retention: v })} unlimitedLabel={t("Para sempre")} />
-                <div className="pf"><label>{t("Quando o limite acaba")}</label>
-                  <select value={f.overage} onChange={(e) => set({ overage: e.target.value as any })}>
-                    <option value="hard_stop">{t("Parar (bloquear até renovar)")}</option><option value="topup">{t("Permitir créditos comprados")}</option>
-                  </select></div>
-              </div>
+              <LimitsFields f={f} set={set} scope={f.billing} all={all} />
 
               <div className="pf-grid" style={{ alignItems: "end" }}>
                 <div className="pf"><label>{t("Visibilidade")}</label>

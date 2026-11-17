@@ -6,6 +6,7 @@ import Icon from "@/components/Icon";
 import { api, money } from "@/lib/api";
 import { useT } from "@/lib/i18n";
 import { countsHours, planLines } from "@/lib/plans";
+import { trialHeadline, useTrial } from "@/lib/trial";
 
 type P = { name: string; amount_cents: number; currency: string; billing_type: string; entitlements: Record<string, any> };
 const FALLBACK: P[] = [
@@ -17,8 +18,21 @@ const FALLBACK: P[] = [
 export default function Pricing() {
   const t = useT();
   const [plans, setPlans] = useState<P[]>(FALLBACK);
+  const trial = useTrial();
   useEffect(() => { api<P[]>("/plans").then((p) => p.length && setPlans(p)).catch(() => {}); }, []);
   return (
+    <>
+    {trial.ready && trial.enabled && (
+      <div className="trial-banner">
+        <div>
+          <span className="eyebrow"><Icon name="check" small /> {t("Teste grátis")}</span>
+          <h3>{trialHeadline(trial.limits, t as any)}</h3>
+          <ul>{planLines(trial.limits, t as any).map((l) => <li key={l}><Icon name="check" small /> {l}</li>)}</ul>
+          {trial.days && <p className="fine">{t("Válido por {n} dias.", { n: trial.days })}</p>}
+        </div>
+        <Link className="btn btn-primary btn-lg" href="/register">{t("Começar o teste grátis")} <Icon name="arrow" small /></Link>
+      </div>
+    )}
     <div className="grid-3" style={{ alignItems: "stretch" }}>
       {plans.map((p, i) => {
         const e = p.entitlements;
@@ -37,5 +51,6 @@ export default function Pricing() {
         );
       })}
     </div>
+    </>
   );
 }
