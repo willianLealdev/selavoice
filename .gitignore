@@ -1,0 +1,27 @@
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+.next/
+storage/
+.pytest_cache/
+
+# --- SEGREDOS e dados locais: NUNCA vão para o git (repositório pode ser público) ---
+dados.txt
+docs/ACESSOS_DEV.md
+*.key
+*.pem
+.claude/
+# --- lixo de desenvolvimento ---
+*.tsbuildinfo
+*.wav
+logo_teste.png
+services/api/selavoice.db*
+services/api/storage/
+apps/web/.next/

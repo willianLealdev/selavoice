@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+storage
+tests
+.pytest_cache
+.env
+.env.*
+tools_seed_demo_usage.py
