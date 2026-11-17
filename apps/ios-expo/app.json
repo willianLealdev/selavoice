@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "SelaVoice",
+    "slug": "selavoice",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.selavoice.app",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "O microfone é usado para transmitir a fala do palestrante para tradução ao vivo.",
+        "NSCameraUsageDescription": "A câmera é usada para escanear o QR Code do evento.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "backgroundColor": "#ffffff"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7b060c2a-d486-47f4-9d65-aa8be61277f7"
+      }
+    },
+    "owner": "willianleal"
+  }
+}

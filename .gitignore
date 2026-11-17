@@ -26,3 +26,6 @@ services/api/selavoice.db*
 services/api/storage/
 apps/web/.next/
 segredos_deploy.txt
+
+# arquivos compilados das lojas (nunca no GitHub)
+build-lojas/
