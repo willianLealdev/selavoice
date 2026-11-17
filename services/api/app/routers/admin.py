@@ -40,9 +40,29 @@ def tenants(_: User = Depends(require_super), db: Session = Depends(get_db)):
     for sub in db.scalars(select(TenantSubscription).where(TenantSubscription.status == "active")).all():
         pv = db.get(PlanVersion, sub.plan_version_id)
         plan_of[sub.tenant_id] = pv.plan.public_name if pv else ""
+    # Plano mostrado = o direito ATIVO e não vencido com mais eventos (igual ao que libera o início do evento).
+    now = datetime.now(timezone.utc)
+    best: dict = {}
+    for en in db.scalars(select(Entitlement).where(Entitlement.active.is_(True))).all():
+        if en.expires_at and (en.expires_at if en.expires_at.tzinfo else en.expires_at.replace(tzinfo=timezone.utc)) <= now:
+            continue
+        if (en.events_remaining or 0) <= 0:
+            continue
+        if en.tenant_id not in best or (en.events_remaining or 0) > (best[en.tenant_id].events_remaining or 0):
+            best[en.tenant_id] = en
+
+    def plan_label(t) -> str:
+        en = best.get(t.id)
+        if en is None:
+            return plan_of.get(t.id, "") or "Sem plano"
+        if en.source == "trial":
+            return "Teste grátis"
+        if en.source == "manual":
+            return "Vitalício (manual)" if en.expires_at is None else f"Manual até {en.expires_at.strftime('%d/%m/%Y')}"
+        return plan_of.get(t.id, "") or "Plano"
     return [{"id": str(t.id), "name": t.name, "slug": t.slug, "type": t.type, "status": t.status,
              "created_at": iso(t.created_at), "users": users.get(t.id, 0), "events": events.get(t.id, 0),
-             "language_minutes": round(float(minutes.get(t.id, 0)), 1), "plan": plan_of.get(t.id, "")} for t in rows]
+             "language_minutes": round(float(minutes.get(t.id, 0)), 1), "plan": plan_label(t)} for t in rows]
 
 
 class ReasonIn(BaseModel):

@@ -76,7 +76,7 @@ export default function Organizacoes() {
           {shown.map((x) => (
             <tr key={x.id}>
               <td><b>{x.name}</b><div className="fine">/o/{x.slug}</div></td><td>{t(ORG_TYPES[x.type] ?? "Outro")}</td>
-              <td>{x.plan ? t(x.plan) : <span className="fine">—</span>}</td><td>{x.users}</td><td>{x.events}</td><td>{num(x.language_minutes)}</td>
+              <td>{x.plan === "Sem plano" ? <span className="pill CANCELED">{t("Sem plano")}</span> : <b>{x.plan.startsWith("Manual até") ? `${t("Manual até")} ${x.plan.slice(11)}` : t(x.plan)}</b>}</td><td>{x.users}</td><td>{x.events}</td><td>{num(x.language_minutes)}</td>
               <td><span className={`pill ${x.status === "active" ? "PUBLISHED" : "CANCELED"}`}>{x.status === "active" ? t("Ativa") : t("Suspensa")}</span></td>
               <td><button className="btn btn-primary btn-sm" onClick={() => openGrant(x)}>{t("Ativar plano")}</button> <button className="btn btn-ghost btn-sm" onClick={() => toggle(x)}>{x.status === "active" ? t("Suspender") : t("Ativar")}</button></td>
             </tr>

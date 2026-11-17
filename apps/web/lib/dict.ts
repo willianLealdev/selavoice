@@ -4,6 +4,9 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Sem plano": ["No plan", "Sin plan"],
+  "Vitalício (manual)": ["Lifetime (manual)", "Vitalicio (manual)"],
+  "Manual até": ["Manual until", "Manual hasta"],
   "Ativar plano": ["Activate plan", "Activar plan"],
   "Libera uso para esta organização sem pagamento. Você escolhe o plano, ou Vitalício (tudo ilimitado, sem data para acabar).": ["Grants usage to this organization without payment. Pick a plan, or Lifetime (everything unlimited, no end date).", "Libera el uso de esta organización sin pago. Elija un plan o Vitalicio (todo ilimitado, sin fecha de fin)."],
   "Vitalício — tudo ilimitado": ["Lifetime — everything unlimited", "Vitalicio — todo ilimitado"],

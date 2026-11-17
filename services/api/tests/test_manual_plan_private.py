@@ -114,3 +114,13 @@ def test_event_hours_count_only_speech_not_silence(client, superadmin, monkeypat
         C.manager._touch_active(ch)
     asyncio.run(tick())
     assert client.get(f"/events/{ev['id']}/usage", headers=h).json()["charged_minutes"] == 1
+
+
+def test_tenants_list_shows_current_plan(client, superadmin):
+    _no_trial(client, superadmin)
+    h, _ = register(client, "Mostra Plano")
+    tid = _tenant_id(client, superadmin, h)
+    plan = lambda: next(t["plan"] for t in client.get("/admin/tenants", headers=superadmin).json() if t["id"] == tid)
+    assert plan() == "Sem plano"
+    client.post(f"/admin/tenants/{tid}/grant-plan", json={"unlimited": True, "reason": "teste de rótulo"}, headers=superadmin)
+    assert plan() == "Vitalício (manual)"
