@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { roleLabel } from "@/lib/roles";
 
 export default function Team() {
   const t = useT();
@@ -24,7 +25,7 @@ export default function Team() {
       <div className="page-h"><h1>{t("Equipe")}</h1></div>
       {err && <div className="err">{t(err)}</div>}
       <table><thead><tr><th>{t("Nome")}</th><th>{t("E-mail")}</th><th>{t("Papel")}</th></tr></thead>
-        <tbody>{members.map((m) => <tr key={m.user_id}><td>{m.name}</td><td>{m.email}</td><td>{m.role}</td></tr>)}</tbody></table>
+        <tbody>{members.map((m) => <tr key={m.user_id}><td>{m.name}</td><td>{m.email}</td><td>{roleLabel(m.role, t)}</td></tr>)}</tbody></table>
       <form className="card" onSubmit={send} style={{ marginTop: 20 }}>
         <h3>{t("Convidar pessoa")}</h3>
         <div className="row">

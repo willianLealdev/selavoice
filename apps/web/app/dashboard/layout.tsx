@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import Icon from "@/components/Icon";
 import InstallApp from "@/components/InstallApp";
 import BackButton from "@/components/BackButton";
+import { roleLabel } from "@/lib/roles";
 import { useSession } from "@/lib/session";
 import { LangSwitch, useT } from "@/lib/i18n";
 
@@ -32,7 +33,7 @@ export default function DashLayout({ children }: { children: React.ReactNode }) 
         {me.is_super_admin && item("/admin", "shield", "Super Admin")}
         <div className="spacer" style={{ flex: 1 }} />
         <div className="who">
-          <div><b>{org ? org.name : t("Sem organização")}</b><span className="fine">{me.email}{org ? ` · ${org.role}` : ""}</span></div>
+          <div><b>{org ? org.name : t("Sem organização")}</b><span className="fine">{me.email}{org ? ` · ${roleLabel(org.role, t)}` : ""}</span></div>
           <InstallApp className="btn btn-ghost btn-sm" />
           <div className="row" style={{ gap: 8 }}>
             <LangSwitch />

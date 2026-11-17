@@ -4,6 +4,9 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Admin": ["Admin", "Admin"],
+  "Operador": ["Operator", "Operador"],
+  "Membro": ["Member", "Miembro"],
   "Verifique seu e-mail": ["Check your email", "Revise su correo"],
   "Sua conta foi criada, mas ainda não está ativa.": ["Your account was created, but it is not active yet.", "Su cuenta fue creada, pero aún no está activa."],
   "Você precisa confirmar o e-mail para ativar a conta.": ["You must confirm your email to activate the account.", "Debe confirmar su correo para activar la cuenta."],

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Kpi, PageHead, Panel, num } from "@/components/AdminUI";
 import { api } from "@/lib/api";
 import { useT } from "@/lib/i18n";
+import { roleLabel } from "@/lib/roles";
 
 const STATUS: Record<string, string> = {
   "auth.login": "Login", "auth.register": "Cadastro", "auth.lockout": "Conta bloqueada", "auth.refresh_reuse": "Token reutilizado (suspeito)",
@@ -49,7 +50,7 @@ export default function Acessos() {
             {a.sessions.map((s: any) => (
               <tr key={s.user_id}>
                 <td><span className={`dot ${s.active_now ? "on" : ""}`} /><b>{s.email}</b>{s.name && <div className="fine">{s.name}</div>}</td>
-                <td>{s.org}</td><td><span className="badge">{s.role || "—"}</span></td>
+                <td>{s.org}</td><td><span className="badge">{roleLabel(s.role, t)}</span></td>
                 <td>{s.last_seen ? new Date(s.last_seen).toLocaleString() : "—"}</td><td className="fine">{s.ip || "—"}</td><td>{s.sessions}</td>
                 <td><button className="btn btn-ghost btn-sm" onClick={() => revoke(s)}>{t("Derrubar sessões")}</button></td>
               </tr>
