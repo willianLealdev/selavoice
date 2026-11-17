@@ -110,3 +110,9 @@ Super Admin (com MFA) › **/admin/integrations**: Gemini, Azure, Deepgram, Deep
 
 ## 7. Como o ambiente local foi montado (para reproduzir)
 Python 3.12 em `services/api/.venv`; Node 24; sem Docker; SQLite. Senhas de demo são geradas aleatoriamente pelo seed.
+
+## Ativar plano manual + evento privado + logo (última rodada)
+- **Ativar plano manual (Super Admin > Organizações)**: `GET /admin/tenants/{id}/entitlements`, `POST /admin/tenants/{id}/grant-plan` (plano existente OU vitalício ilimitado; dias opcionais; motivo ≥10 auditado; `Entitlement.source="manual"`), `POST /admin/entitlements/{id}/deactivate`. Tela mostra os saldos (explica o 402 "sem plano").
+- **Evento privado**: `events.access_password_hash` (argon2, migração 0006). Criar evento: `private` + `access_password` (≥4). `GET /public/join/{code}` sem a senha (cabeçalho `X-Event-Password`) devolve só título/organização; `POST .../token` exige `{password}` (403 se errada, 10/min). Eventos privados NÃO aparecem no perfil público/histórico nem em apostilas públicas. Tela do ouvinte pede a senha (guardada só em sessionStorage).
+- **Logo**: `logo.webp` agora com fundo transparente + `color-scheme: light` (Safari escuro não escurece mais o site).
+- Testes: 128 passando.

@@ -19,7 +19,7 @@ from ..core.timeutil import iso
 from ..db import get_db, scoped
 from ..deps import Ctx, require_admin, require_member, require_operator
 from ..models import Event, EventSession, EventStatus, Tenant
-from ..security import create_ingest_token, gen_join_code
+from ..security import create_ingest_token, gen_join_code, hash_password
 from ..services.billing import QuotaError, reserve_event_start
 from ..services import original_asr
 from ..services.channels import manager
@@ -48,6 +48,8 @@ class EventIn(BaseModel):
     scripture: str = Field(default="", max_length=200)
     recording_policy: str = Field(default="none", pattern="^(none|transcript_only|audio_and_transcript)$")
     rooms: list[str] = Field(default_factory=lambda: ["main"], max_length=20)
+    private: bool = False                                   # evento privado: o ouvinte precisa da senha para entrar
+    access_password: str | None = Field(default=None, min_length=4, max_length=60)
 
 
 class EventUpdate(BaseModel):
@@ -64,7 +66,7 @@ def out(e: Event) -> dict:
     return {"id": str(e.id), "title": e.title, "type": e.type, "description": e.description,
             "starts_at": iso(e.starts_at), "timezone": e.timezone, "original_language": e.original_language,
             "status": e.status.value, "presenter": e.presenter, "theme": e.theme, "scripture": e.scripture,
-            "recording_policy": e.recording_policy, "join_code": e.join_code,
+            "recording_policy": e.recording_policy, "join_code": e.join_code, "private": bool(e.access_password_hash),
             "join_url": f"/e/{e.join_code}",
             "sessions": [{"id": str(s.id), "room": s.room, "state": s.state} for s in e.sessions]}
 
@@ -78,10 +80,13 @@ def get_event_or_404(db: Session, ctx: Ctx, event_id: UUID) -> Event:
 
 @router.post("", status_code=201)
 def create_event(body: EventIn, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
+    if body.private and not body.access_password:
+        raise HTTPException(422, "Evento privado precisa de uma senha (mínimo 4 caracteres).")
     ev = Event(tenant_id=ctx.tenant_id, title=body.title, type=body.type, description=body.description,
                starts_at=body.starts_at, timezone=body.timezone, original_language=body.original_language,
                presenter=body.presenter, theme=body.theme, scripture=body.scripture,
-               recording_policy=body.recording_policy, join_code=gen_join_code())
+               recording_policy=body.recording_policy, join_code=gen_join_code(),
+               access_password_hash=hash_password(body.access_password) if body.private and body.access_password else None)
     ev.sessions = [EventSession(tenant_id=ctx.tenant_id, room=r) for r in body.rooms]
     db.add(ev)
     db.commit()

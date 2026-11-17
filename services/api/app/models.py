@@ -166,6 +166,8 @@ class Event(_Mixin, Base):
     # none | transcript_only | audio_and_transcript  (consentimento explícito)
     recording_policy: Mapped[str] = mapped_column(String(30), default="none")
     join_code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
+    # Evento PRIVADO: hash (argon2) da senha definida por quem criou. None = evento público. A senha nunca é guardada em claro.
+    access_password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
     venue_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("venues.id"), nullable=True)
     # Direito (plano/compra) que este evento está consumindo; fixado ao INICIAR. Dele vêm os limites do evento.
     entitlement_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)

@@ -44,6 +44,7 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
   const [books, setBooks] = useState<any[]>([]);
   const [ready, setReady] = useState(false);
   const [about, setAbout] = useState(false);
+  const [pw, setPw] = useState(""); const [pwErr, setPwErr] = useState("");   // senha de evento privado
   const tokenRef = useRef(""); const sidRef = useRef("");
   const boxRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -98,21 +99,30 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
   }, [speak]);
 
   // dados do evento + token de ouvinte
-  useEffect(() => {
-    (async () => {
-      const r = await fetch(`${API}/public/join/${code}`);
+  // entrar: evento público abre direto; privado pede a senha (guardada só nesta aba, não no aparelho)
+  const enter = useCallback(async (password?: string) => {
+    {
+      const hdr: Record<string, string> = {}; if (password) hdr["X-Event-Password"] = password;
+      const r = await fetch(`${API}/public/join/${code}`, { headers: hdr });
       if (!r.ok) return setStatus("Evento não encontrado.");
       const i = await r.json(); setInfo(i); sidRef.current = i.session_id;
+      if (i.private) { if (password) setPwErr("Senha incorreta."); return; }
+      if (password) try { sessionStorage.setItem(`sv_pw_${code}`, password); } catch {}
       try {  // "abertos recentemente" na tela inicial do app (fica só neste aparelho)
         const cur = JSON.parse(localStorage.getItem("sv_recent") ?? "[]").filter((x: any) => x.code !== code);
         localStorage.setItem("sv_recent", JSON.stringify([{ code, title: i.title, org: i.organization }, ...cur].slice(0, 5)));
       } catch {}
-      const tk = await fetch(`${API}/public/join/${code}/token`, { method: "POST" });
+      const tk = await fetch(`${API}/public/join/${code}/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: password ?? null }) });
+      if (!tk.ok) return setPwErr("Senha incorreta.");
       tokenRef.current = (await tk.json()).token; setReady(true);
       fetch(`${API}/public/booklets/${code}`).then((x) => x.json()).then(setBooks).catch(() => {});
-    })();
-    try { const m = localStorage.getItem("sv_mode") as Mode | null; if (m) setMode(m); } catch {}
+    }
   }, [code]);
+  useEffect(() => {
+    let saved = ""; try { saved = sessionStorage.getItem(`sv_pw_${code}`) ?? ""; } catch {}
+    enter(saved || undefined);
+    try { const m = localStorage.getItem("sv_mode") as Mode | null; if (m) setMode(m); } catch {}
+  }, [code, enter]);
 
   // escolhe o idioma inicial entre os DISPONÍVEIS: preferência salva > idioma do site > inglês > primeiro da lista
   const langs: Lang[] = info?.languages ?? [];
@@ -207,6 +217,15 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
   const pick = (c: string) => { setLang(c); setStatus(""); try { localStorage.setItem("sv_lang", c); } catch {} };
 
   if (!info) return <div className="auth-wrap">{status ? t(status) : t("Carregando…")}</div>;
+  if (info.private && !ready) return (
+    <div className="auth-wrap"><form className="card" style={{ maxWidth: 380, width: "100%" }} onSubmit={(e) => { e.preventDefault(); setPwErr(""); enter(pw); }}>
+      <h2 style={{ marginTop: 0 }}>{info.title}</h2><p className="muted">{info.organization} · {t("Evento privado")}</p>
+      <label>{t("Senha do evento")}</label><input type="password" required autoFocus value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="off" />
+      {pwErr && <div className="err" style={{ margin: "10px 0 0" }}>{t(pwErr)}</div>}
+      <button className="btn btn-primary" style={{ width: "100%", marginTop: 14 }}>{t("Entrar")}</button>
+      <p className="fine">{t("Peça a senha a quem organizou o evento.")}</p>
+    </form></div>
+  );
   const showText = mode !== "audio";
   const stateBadge = live ? <span className="badge badge-live">{t("AO VIVO")}</span>
     : <span className="badge on-dark">{info.status === "ENDED" ? t("Encerrado") : t("Aguardando início")}</span>;

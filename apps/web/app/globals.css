@@ -4,6 +4,7 @@
  * bordas de 1px em vez de sombras pesadas, tipografia Inter, ícones de traço fino. Sem gradientes decorativos.
  */
 :root {
+  color-scheme: light;   /* evita "modo escuro automático" do navegador: a logo tem texto azul-marinho e só aparece em fundo claro */
   --ink: #0b1220;
   --text: #1c2536;
   --muted: #5b6678;

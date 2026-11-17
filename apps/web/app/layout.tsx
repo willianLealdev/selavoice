@@ -26,6 +26,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0b1220",       // cor da barra de status do celular
+  colorScheme: "light",        // o site é claro: impede o Safari/Chrome de escurecer o fundo e sumir com a logo (azul-marinho)
   width: "device-width", initialScale: 1,
   viewportFit: "cover",        // usa a tela toda (respeita o "notch" via env(safe-area-inset-*))
 };

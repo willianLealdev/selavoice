@@ -176,7 +176,7 @@ public_router = APIRouter(prefix="/public/booklets", tags=["public"])
 def public_list(code: str, db: Session = Depends(get_db)):
     """Lista apostilas PUBLICADAS do evento (rascunho/aprovado-não-publicado nunca aparece)."""
     ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
-    if not ev:
+    if not ev or ev.access_password_hash:   # privado: sem apostilas públicas
         raise HTTPException(404)
     docs = db.scalars(select(Document).where(Document.event_id == ev.id, Document.status == DocStatus.PUBLISHED)).all()
     return [{"id": str(d.id), "title": d.title, "language": d.language} for d in docs]
@@ -186,7 +186,7 @@ def public_list(code: str, db: Session = Depends(get_db)):
 def public_pdf(code: str, doc_id: UUID, db: Session = Depends(get_db)):
     ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
     d = db.get(Document, doc_id)
-    if not ev or not d or d.event_id != ev.id or d.status != DocStatus.PUBLISHED or not d.pdf_key:
+    if not ev or ev.access_password_hash or not d or d.event_id != ev.id or d.status != DocStatus.PUBLISHED or not d.pdf_key:
         raise HTTPException(404)
     path = (STORAGE / d.pdf_key).resolve()
     if not str(path).startswith(str((STORAGE / str(d.tenant_id)).resolve())) or not path.exists():

@@ -19,6 +19,7 @@ export default function Events() {
   const [show, setShow] = useState(false);
   const [err, setErr] = useState("");
   const [f, setF] = useState({ title: "", type: "conference", starts_at: "", presenter: "", theme: "", original_language: "pt", recording_policy: "none" });
+  const [priv, setPriv] = useState(false); const [pw, setPw] = useState("");   // evento privado + senha de acesso
 
   const load = () => {
     const p = new URLSearchParams();
@@ -31,8 +32,8 @@ export default function Events() {
   async function create(e: React.FormEvent) {
     e.preventDefault(); setErr("");
     try {
-      await api("/events", { method: "POST", json: { ...f, starts_at: new Date(f.starts_at).toISOString() } });
-      setShow(false); load();
+      await api("/events", { method: "POST", json: { ...f, starts_at: new Date(f.starts_at).toISOString(), private: priv, access_password: priv ? pw : null } });
+      setShow(false); setPriv(false); setPw(""); load();
     } catch (e: any) { setErr(e.message); }
   }
   const set = (k: string) => (e: React.ChangeEvent<any>) => setF({ ...f, [k]: e.target.value });
@@ -61,6 +62,11 @@ export default function Events() {
                 <option value="none">{t("Não gravar")}</option><option value="transcript_only">{t("Somente transcrição")}</option><option value="audio_and_transcript">{t("Áudio e transcrição")}</option>
               </select></div>
           </div>
+          <label className="pf-check" style={{ marginTop: 14 }}><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} /> {t("Evento privado (só entra quem tem a senha)")}</label>
+          {priv ? (
+            <div style={{ maxWidth: 360 }}><label>{t("Senha do evento")}</label><input required minLength={4} maxLength={60} value={pw} onChange={(e) => setPw(e.target.value)} placeholder={t("Ex.: culto2026")} autoComplete="off" />
+              <p className="fine">{t("Passe esta senha só para quem pode ouvir. Ela aparece na lista pública? Não: evento privado não aparece em nenhuma lista, só abre com o código e a senha.")}</p></div>
+          ) : <p className="fine">{t("Evento público: aparece na página da sua organização e qualquer pessoa com o código entra.")}</p>}
           <button className="btn btn-primary" style={{ marginTop: 16 }}>{t("Agendar evento")}</button>
         </form>
       )}

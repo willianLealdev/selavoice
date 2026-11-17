@@ -20,7 +20,7 @@ from ..core.timeutil import iso
 from ..db import get_db
 from ..deps import require_super
 from ..models import (AuditLog, BillingType, CreditLedger, Event, FailoverEvent, Membership, Plan, PlanVersion, Tenant,
-                      TenantSubscription, UsageEvent, User)
+                      TenantSubscription, UsageEvent, User, Entitlement)
 from ..providers.base import ProviderHealth
 from ..security import create_access_token
 from ..services.billing import get_stripe
@@ -373,3 +373,76 @@ def trial_put(body: TrialIn, request: Request, su: User = Depends(require_super)
     audit(db, action="admin.trial_update", actor_id=su.id, actor_role="SUPER_ADMIN", ip=client_ip(request),
           meta={"enabled": cfg["enabled"], "days": cfg["days"]})
     return cfg
+
+
+# ---------------- Ativar plano MANUALMENTE (sem pagamento) ----------------
+# O dono decide: presente, parceria, igreja sem verba, vitalício... Cria um "direito" (Entitlement) com origem "manual".
+# Segurança: só Super Admin, exige MOTIVO (fica na auditoria) e cada ativação tem referência única (não conflita com Stripe).
+import uuid as _uuid
+from datetime import timedelta as _td
+from ..services.plan_schema import grant_amounts as _grant_amounts, is_unlimited
+
+# Vitalício: tudo sem limite (None = ilimitado) e sem data de validade.
+UNLIMITED_LIMITS = {"included_events": None, "included_hours": None, "max_event_hours": None, "included_language_minutes": None,
+                    "max_languages": None, "listener_concurrency": None, "max_concurrent_events": None, "admin_seats": None,
+                    "recordings": True, "pdf_booklets": True, "retention_days": None, "overage": "hard_stop", "allowed_languages": []}
+
+
+def _ent_out(e: Entitlement) -> dict:
+    return {"id": str(e.id), "source": e.source, "active": e.active, "events_remaining": e.events_remaining,
+            "event_minutes_remaining": e.event_minutes_remaining, "language_minutes_remaining": e.language_minutes_remaining,
+            "expires_at": iso(e.expires_at) if e.expires_at else None, "created_at": iso(e.created_at),
+            "unlimited": is_unlimited(e.events_remaining) and e.event_minutes_remaining is None}
+
+
+@router.get("/tenants/{tenant_id}/entitlements")
+def tenant_entitlements(tenant_id: UUID, _: User = Depends(require_super), db: Session = Depends(get_db)):
+    """Saldos da organização (teste grátis, planos, concessões manuais) — mostra por que um evento foi ou não liberado."""
+    if not db.get(Tenant, tenant_id):
+        raise HTTPException(404, "Organização não encontrada.")
+    rows = db.scalars(select(Entitlement).where(Entitlement.tenant_id == tenant_id).order_by(Entitlement.created_at.desc())).all()
+    return [_ent_out(e) for e in rows]
+
+
+class GrantIn(BaseModel):
+    plan_version_id: UUID | None = None           # um plano existente OU ...
+    unlimited: bool = False                       # ... tudo ilimitado
+    days: int | None = Field(default=None, ge=1, le=36500)   # None = sem validade (vitalício)
+    reason: str = Field(min_length=10, max_length=300)
+
+
+@router.post("/tenants/{tenant_id}/grant-plan", status_code=201)
+def grant_plan(tenant_id: UUID, body: GrantIn, request: Request, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    if not db.get(Tenant, tenant_id):
+        raise HTTPException(404, "Organização não encontrada.")
+    if body.unlimited == (body.plan_version_id is not None):
+        raise HTTPException(422, "Escolha um plano OU vitalício/ilimitado.")
+    if body.unlimited:
+        limits = dict(UNLIMITED_LIMITS)
+    else:
+        pv = db.get(PlanVersion, body.plan_version_id)
+        if not pv:
+            raise HTTPException(404, "Plano não encontrado.")
+        limits = normalize(pv.entitlements or {})
+    g = _grant_amounts(limits)
+    expires = datetime.now(timezone.utc) + _td(days=body.days) if body.days else None
+    ent = Entitlement(tenant_id=tenant_id, source="manual", source_ref=f"manual:{_uuid.uuid4().hex}", limits=limits,
+                      events_remaining=g["events"], language_minutes_remaining=g["language_minutes"],
+                      event_minutes_remaining=g["event_minutes"], expires_at=expires)
+    db.add(ent)
+    db.commit()
+    audit(db, action="admin.grant_plan", actor_id=su.id, actor_role="SUPER_ADMIN", tenant_id=tenant_id, target=str(ent.id),
+          reason=body.reason, ip=client_ip(request), meta={"unlimited": body.unlimited, "days": body.days})
+    return _ent_out(ent)
+
+
+@router.post("/entitlements/{ent_id}/deactivate")
+def deactivate_entitlement(ent_id: UUID, body: ReasonIn, request: Request, su: User = Depends(require_super), db: Session = Depends(get_db)):
+    e = db.get(Entitlement, ent_id)
+    if not e:
+        raise HTTPException(404, "Direito não encontrado.")
+    e.active = False
+    db.commit()
+    audit(db, action="admin.deactivate_plan", actor_id=su.id, actor_role="SUPER_ADMIN", tenant_id=e.tenant_id, target=str(e.id),
+          reason=body.reason, ip=client_ip(request))
+    return _ent_out(e)

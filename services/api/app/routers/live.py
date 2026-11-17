@@ -16,6 +16,7 @@ import re
 from uuid import UUID
 
 import jwt
+from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,7 +27,7 @@ from ..core.ratelimit import client_ip, rate_limit, ws_counter
 from ..db import SessionLocal, get_db
 from ..deps import Ctx, require_member, require_operator
 from ..models import Event, EventSession, EventStatus, Membership, Tenant
-from ..security import create_listener_token, decode_token
+from ..security import verify_password, create_listener_token, decode_token
 from ..services import original_asr
 from ..services.audio_gate import AudioGate, gates, get_audio
 from ..services.event_clock import event_limits
@@ -49,7 +50,7 @@ def _plan_languages(langs: list[dict], ev: Event, db: Session) -> list[dict]:
 
 # ---------------- Público ----------------
 @router.get("/public/join/{code}", dependencies=[Depends(_pub_limit)])
-async def public_join(code: str, db: Session = Depends(get_db)):
+async def public_join(code: str, db: Session = Depends(get_db), x_event_password: str | None = Header(default=None)):
     ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
     if not ev or ev.status == EventStatus.CANCELED:
         raise HTTPException(404, "Evento não encontrado.")
@@ -58,18 +59,30 @@ async def public_join(code: str, db: Session = Depends(get_db)):
     t = db.get(Tenant, ev.tenant_id)
     if t.status != "active":
         raise HTTPException(404, "Evento não encontrado.")
-    return {"title": ev.title, "type": ev.type, "presenter": ev.presenter, "theme": ev.theme,
+    if ev.access_password_hash and not verify_password(x_event_password or "", ev.access_password_hash):
+        # PRIVADO sem a senha (a senha vai no cabeçalho, nunca na URL): sem a senha só mostramos o mínimo para a tela de senha (nada de tema, palestrante ou idiomas).
+        return {"private": True, "title": ev.title, "organization": t.name, "organization_slug": t.slug, "branding": t.branding,
+                "status": ev.status.value}
+    return {"private": False, "title": ev.title, "type": ev.type, "presenter": ev.presenter, "theme": ev.theme,
             "scripture": ev.scripture, "status": ev.status.value, "original_language": ev.original_language,
             "starts_at": iso(ev.starts_at), "organization": t.name, "organization_slug": t.slug, "branding": t.branding, "contact": contact_out(t),
             "session_id": str(ev.sessions[0].id) if ev.sessions else None,
             "languages": _plan_languages(await available_languages(), ev, db)}
 
 
+class JoinIn(BaseModel):
+    password: str | None = Field(default=None, max_length=60)
+
+
 @router.post("/public/join/{code}/token", dependencies=[Depends(rate_limit("listener_token", 30))])
-def listener_token(code: str, db: Session = Depends(get_db)):
+def listener_token(code: str, body: JoinIn | None = None, db: Session = Depends(get_db),
+                   _slow: None = Depends(rate_limit("join_password", 10))):
     ev = db.scalar(select(Event).where(Event.join_code == code.lower()))
     if not ev or ev.status == EventStatus.CANCELED or not ev.sessions:
         raise HTTPException(404, "Evento não encontrado.")
+    # Evento privado: o token só sai com a senha certa (limite de 10 tentativas/min por IP contra adivinhação).
+    if ev.access_password_hash and not verify_password((body.password if body else None) or "", ev.access_password_hash):
+        raise HTTPException(403, "Senha do evento incorreta.")
     s = ev.sessions[0]
     return {"token": create_listener_token(str(s.id), str(ev.tenant_id)), "session_id": str(s.id)}
 
