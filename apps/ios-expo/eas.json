@@ -15,7 +15,10 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6835756964"
+        "ascAppId": "6835756964",
+        "ascApiKeyPath": "C:/Users/Owner/selavoice-keys/ios/AuthKey_KLWD8SP56L.p8",
+        "ascApiKeyIssuerId": "8d710794-d67a-4434-89c2-b9f9702b121c",
+        "ascApiKeyId": "KLWD8SP56L"
       }
     }
   }

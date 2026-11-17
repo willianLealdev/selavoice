@@ -68,6 +68,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     await act(() => api(`/events/${id}`, { method: "PATCH", json: body }), "Evento atualizado.");
     setEdit(null);
   }
+  const [gerando, setGerando] = useState(false);
+  async function gerarApostila() {
+    setGerando(true);
+    try { await api(`/documents/events/${id}/auto`, { method: "POST" }); setMsg({ t: "ok", m: "Apostila criada e publicada." }); await loadDocs(); }
+    catch (e: any) { setMsg({ t: "err", m: e.message }); }
+    setGerando(false);
+  }
+  // depois de encerrar, a apostila nasce sozinha no servidor: atualiza a lista por um tempo até ela aparecer
+  useEffect(() => {
+    if (ev?.status !== "ENDED" || docs.length > 0) return;
+    let n = 0; const h = setInterval(() => { loadDocs(); if (++n >= 20) clearInterval(h); }, 6000);
+    return () => clearInterval(h);
+  }, [ev?.status, docs.length, loadDocs]);
   const sid0 = ev?.sessions?.[0]?.id;
   async function iniciar() {
     try {
@@ -187,13 +200,21 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
-        <h3>{t("Transcrição e documento pós-evento")}</h3>
-        <p className="fine">{t("Cole a transcrição original (um parágrafo por linha em branco) — vinda do faster-whisper/Deepgram ou revisada à mão. Depois gere o documento.")}</p>
-        <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Cole aqui a transcrição…")} />
-        <div className="row" style={{ marginTop: 10 }}>
-          <button className="btn btn-ghost btn-sm" disabled={!text.trim()} onClick={() => act(() => api(`/documents/events/${id}/original-transcript`, { method: "POST", json: { paragraphs: text.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) } }), "Transcrição importada.")}>{t("Importar transcrição")}</button>
-          <button className="btn btn-primary btn-sm" onClick={() => act(() => api(`/documents/events/${id}/generate`, { method: "POST" }), "Rascunho do documento criado.").then(loadDocs)}>{t("Gerar documento")}</button>
+        <h3>{t("Apostila do evento")}</h3>
+        <p className="fine">{t("Quando o evento termina, a apostila é escrita sozinha a partir de tudo que foi falado (pontos da mensagem, frases marcantes, referências e perguntas para refletir), com a logo da sua organização, e já é publicada. Você pode editar, refazer ou excluir.")}</p>
+        <div className="row" style={{ marginTop: 6 }}>
+          {ev.status === "ENDED" && <button className="btn btn-primary btn-sm" disabled={gerando} onClick={gerarApostila}>{gerando ? t("Escrevendo a apostila… (pode levar alguns minutos)") : docs.length ? t("Refazer a apostila agora") : t("Gerar a apostila agora")}</button>}
+          {ev.status === "LIVE" && <span className="fine">{t("A apostila será criada automaticamente quando você encerrar o evento.")}</span>}
         </div>
+        {ev.status === "ENDED" && docs.length === 0 && !gerando && <p className="fine" style={{ marginTop: 10 }}>{t("A apostila aparece aqui em instantes depois do encerramento. Se não aparecer, clique em Gerar a apostila agora.")}</p>}
+        <details style={{ marginTop: 12 }}>
+          <summary className="fine" style={{ cursor: "pointer" }}>{t("Avançado: colar a transcrição manualmente")}</summary>
+          <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={t("Cole aqui a transcrição…")} style={{ marginTop: 8 }} />
+          <div className="row" style={{ marginTop: 10 }}>
+            <button className="btn btn-ghost btn-sm" disabled={!text.trim()} onClick={() => act(() => api(`/documents/events/${id}/original-transcript`, { method: "POST", json: { paragraphs: text.split(/\n\s*\n/).map((s) => s.trim()).filter(Boolean) } }), "Transcrição importada.")}>{t("Importar transcrição")}</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => act(() => api(`/documents/events/${id}/generate`, { method: "POST" }), "Rascunho do documento criado.").then(loadDocs)}>{t("Gerar rascunho para revisão")}</button>
+          </div>
+        </details>
         {docs.length === 0 && <p className="fine" style={{ marginTop: 14 }}>{t("Nenhum documento salvo neste evento ainda.")}</p>}
         {docs.map((d) => (
           <div key={d.id} style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 12 }}>

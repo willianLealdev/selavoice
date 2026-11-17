@@ -4,6 +4,17 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Apostila do evento": ["Event booklet", "Apuntes del evento"],
+  "Quando o evento termina, a apostila é escrita sozinha a partir de tudo que foi falado (pontos da mensagem, frases marcantes, referências e perguntas para refletir), com a logo da sua organização, e já é publicada. Você pode editar, refazer ou excluir.": ["When the event ends, the booklet is written automatically from everything that was said (key points, memorable quotes, references and reflection questions), with your organization's logo, and published right away. You can edit, redo or delete it.", "Al terminar el evento, los apuntes se escriben solos a partir de todo lo dicho (puntos clave, frases destacadas, referencias y preguntas para reflexionar), con el logo de su organización, y se publican de inmediato. Puede editarlos, rehacerlos o eliminarlos."],
+  "Escrevendo a apostila… (pode levar alguns minutos)": ["Writing the booklet… (may take a few minutes)", "Escribiendo los apuntes… (puede tardar unos minutos)"],
+  "Refazer a apostila agora": ["Redo the booklet now", "Rehacer los apuntes ahora"],
+  "Gerar a apostila agora": ["Generate the booklet now", "Generar los apuntes ahora"],
+  "A apostila será criada automaticamente quando você encerrar o evento.": ["The booklet will be created automatically when you end the event.", "Los apuntes se crearán automáticamente cuando termine el evento."],
+  "A apostila aparece aqui em instantes depois do encerramento. Se não aparecer, clique em Gerar a apostila agora.": ["The booklet appears here a few moments after the event ends. If it does not, click Generate the booklet now.", "Los apuntes aparecen aquí unos instantes después de terminar. Si no aparecen, haga clic en Generar los apuntes ahora."],
+  "Avançado: colar a transcrição manualmente": ["Advanced: paste the transcript manually", "Avanzado: pegar la transcripción manualmente"],
+  "Gerar rascunho para revisão": ["Generate draft for review", "Generar borrador para revisión"],
+  "Apostila criada e publicada.": ["Booklet created and published.", "Apuntes creados y publicados."],
+  "Gerar e publicar a apostila automaticamente quando o evento terminar": ["Generate and publish the booklet automatically when the event ends", "Generar y publicar los apuntes automáticamente cuando termine el evento"],
   "Em qual idioma você quer ouvir?": ["Which language do you want to listen in?", "¿En qué idioma quiere escuchar?"],
   "Vamos lembrar da sua escolha neste aparelho. Você pode trocar quando quiser no botão de idioma, no topo.": ["We will remember your choice on this device. You can change it any time with the language button at the top.", "Recordaremos su elección en este dispositivo. Puede cambiarla cuando quiera con el botón de idioma, arriba."],
   "Áudio em transmissão!": ["Audio is live!", "¡Audio en transmisión!"],

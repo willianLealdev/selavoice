@@ -16,16 +16,17 @@ export default function Profile() {
   const [name, setName] = useState(""); const [color, setColor] = useState("#0B63CE"); const [listed, setListed] = useState(true); const [hist, setHist] = useState(true);
   const [c, setC] = useState<Record<string, string>>({});
   const [delPw, setDelPw] = useState(""); const [delErr, setDelErr] = useState("");
+  const [autoBook, setAutoBook] = useState(true);   // gerar e publicar a apostila sozinha ao encerrar o evento
   const [au, setAu] = useState<{ filter: string; noise_suppression: boolean; only_event_language: boolean }>({ filter: "normal", noise_suppression: true, only_event_language: true }); const [busy, setBusy] = useState(false);
   useEffect(() => {
     api("/organizations/me").then(async (o) => {
-      setOrg(o); setName(o.name); setListed(o.listed); setHist(o.history_public !== false); setC(o.contact ?? {}); if (o.audio) setAu(o.audio); setColor(o.branding?.primary_color || "#0B63CE");
+      setOrg(o); setName(o.name); setListed(o.listed); setHist(o.history_public !== false); setC(o.contact ?? {}); setAutoBook(o.auto_booklet !== false); if (o.audio) setAu(o.audio); setColor(o.branding?.primary_color || "#0B63CE");
       setQr(await QRCode.toDataURL(`${location.origin}/o/${o.slug}`, { width: 260, margin: 1 }));
     }).catch((e) => setMsg({ ok: false, m: e.message }));
   }, []);
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    try { await api("/organizations/me", { method: "PATCH", json: { name, listed, history_public: hist, contact: c, audio: au, branding: { primary_color: color } } }); setMsg({ ok: true, m: t("Salvo.") }); }
+    try { await api("/organizations/me", { method: "PATCH", json: { name, listed, history_public: hist, auto_booklet: autoBook, contact: c, audio: au, branding: { primary_color: color } } }); setMsg({ ok: true, m: t("Salvo.") }); }
     catch (x: any) { setMsg({ ok: false, m: x.message }); }
   }
   async function sendLogo(f?: File) {
@@ -93,6 +94,9 @@ export default function Profile() {
           <p className="fine">{t("Se desmarcar, só quem tiver o QR ou o link do perfil encontra sua organização.")}</p>
           <label style={{ display: "flex", gap: 8, alignItems: "center", fontWeight: 500 }}>
             <input type="checkbox" style={{ width: "auto" }} checked={hist} onChange={(e) => setHist(e.target.checked)} /> {t("Mostrar histórico de eventos no perfil público")}
+          </label>
+          <label className="pf-check">
+            <input type="checkbox" style={{ width: "auto" }} checked={autoBook} onChange={(e) => setAutoBook(e.target.checked)} /> {t("Gerar e publicar a apostila automaticamente quando o evento terminar")}
           </label>
           <p className="fine">{t("O público poderá reabrir a transcrição dos eventos já encerrados.")}</p>
           <button className="btn btn-primary" style={{ marginTop: 12 }}>{t("Salvar")}</button>

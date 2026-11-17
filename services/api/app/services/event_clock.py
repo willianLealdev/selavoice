@@ -122,6 +122,8 @@ async def end_event(db: Session, ev: Event, reason: str) -> None:
         await original_asr.close(s.id)
     db.commit()
     audit(db, action="event.auto_stop", tenant_id=ev.tenant_id, target=str(ev.id), reason=reason)
+    from .auto_book import schedule   # (importa aqui para não criar ciclo de imports)
+    schedule(ev.id)                    # encerrou sozinho (limite do plano): a apostila também sai sozinha
 
 
 async def tick() -> int:

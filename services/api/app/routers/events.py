@@ -9,7 +9,7 @@ REGRAS
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import BackgroundTasks, APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,7 +21,7 @@ from ..deps import Ctx, require_admin, require_member, require_operator
 from ..models import Event, EventSession, EventStatus, Tenant
 from ..security import create_ingest_token, gen_join_code, hash_password
 from ..services.billing import QuotaError, reserve_event_start
-from ..services import original_asr
+from ..services import auto_book, original_asr
 from ..services.channels import manager
 from ..services.event_clock import charge, charged_minutes, elapsed_minutes, event_entitlement, event_limits, flush_speech, speech_minutes
 from ..services.plan_schema import is_unlimited, limit as plan_limit, max_event_minutes
@@ -208,7 +208,7 @@ def start_event(event_id: UUID, ctx: Ctx = Depends(require_operator), db: Sessio
 
 
 @router.post("/{event_id}/stop")
-async def stop_event(event_id: UUID, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
+async def stop_event(event_id: UUID, background: BackgroundTasks, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
     ev = get_event_or_404(db, ctx, event_id)
     _transition(ev, EventStatus.ENDED)
     ev.status, ev.ended_at = EventStatus.ENDED, datetime.now(timezone.utc)
@@ -219,6 +219,7 @@ async def stop_event(event_id: UUID, ctx: Ctx = Depends(require_operator), db: S
         await original_asr.close(s.id)
     db.commit()
     audit(db, action="event.stop", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(ev.id), ip=ctx.ip)
+    background.add_task(auto_book.run_safe, ev.id)   # a apostila nasce sozinha, depois da resposta (não atrasa o Encerrar)
     return out(ev)
 
 

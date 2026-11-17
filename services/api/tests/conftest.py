@@ -109,3 +109,10 @@ def speech_frame(n_samples: int = 320, amp: int = 6000, freq: float = 220.0, pha
     import array, math
     a = array.array("h", (int(amp * math.sin(2 * math.pi * freq * (phase + i) / 16000)) for i in range(n_samples)))
     return a.tobytes()
+
+
+@pytest.fixture(autouse=True)
+def _book_sem_espera(monkeypatch):
+    """A apostila automática espera alguns segundos pelos últimos trechos da fala; nos testes não precisa."""
+    from app.services import auto_book
+    monkeypatch.setattr(auto_book, "DELAY_S", 0.0)

@@ -30,7 +30,8 @@ def my_org(ctx: Ctx = Depends(require_member), db: Session = Depends(get_db)):
             "timezone": t.timezone, "branding": t.branding, "role": ctx.role.value,
             "listed": (t.settings or {}).get("listed", True),
             "history_public": (t.settings or {}).get("history_public", True),
-            "contact": (t.settings or {}).get("contact", {}), "audio": get_audio(t.settings)}
+            "contact": (t.settings or {}).get("contact", {}), "audio": get_audio(t.settings),
+            "auto_booklet": (t.settings or {}).get("auto_booklet", True)}
 
 
 class OrgUpdate(BaseModel):
@@ -42,6 +43,7 @@ class OrgUpdate(BaseModel):
     contact: dict | None = None   # endereço, site, redes sociais (públicos)
     history_public: bool | None = None   # mostrar o histórico de eventos encerrados no perfil público
     listed: bool | None = None    # aparecer na busca pública de igrejas
+    auto_booklet: bool | None = None   # gerar e publicar a apostila sozinha quando o evento termina
 
 
 @router.patch("/organizations/me")
@@ -65,6 +67,8 @@ def update_org(body: OrgUpdate, ctx: Ctx = Depends(require_admin), db: Session =
         t.settings = {**(t.settings or {}), "contact": c}
     if "history_public" in data:
         t.settings = {**(t.settings or {}), "history_public": bool(data.pop("history_public"))}
+    if "auto_booklet" in data:
+        t.settings = {**(t.settings or {}), "auto_booklet": bool(data.pop("auto_booklet"))}
     if "listed" in data:  # vai para settings (JSON); reatribui o dict para o SQLAlchemy detectar a mudança
         t.settings = {**(t.settings or {}), "listed": bool(data.pop("listed"))}
     if "branding" in data:  # mescla preservando o logo que o servidor definiu

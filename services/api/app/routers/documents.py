@@ -19,7 +19,8 @@ from ..deps import Ctx, require_admin, require_member, require_operator
 from ..models import DocStatus, Document, Event, PublicationApproval, Tenant, TranscriptSegment
 from ..services.event_clock import tenant_limits
 from ..services.plan_schema import limit as plan_limit
-from ..services.editorial import STORAGE, build_draft, detect_references, render_pdf
+from ..services import auto_book
+from ..services.editorial import STORAGE, build_draft, detect_references, fmt_date, render_book
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -75,6 +76,24 @@ def generate(event_id: UUID, ctx: Ctx = Depends(require_operator), db: Session =
     db.commit()
     audit(db, action="doc.generate", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(d.id), ip=ctx.ip)
     return dout(d)
+
+
+@router.post("/events/{event_id}/auto", status_code=202)
+def generate_auto(event_id: UUID, ctx: Ctx = Depends(require_operator), db: Session = Depends(get_db)):
+    """Gera AGORA a apostila automática do evento (DeepSeek + PDF com logo) e já publica. Útil para refazer a apostila
+    (ex.: depois de importar a transcrição ou se a geração automática ao encerrar falhou). Pode levar alguns minutos."""
+    ev = db.scalar(scoped(db, Event, ctx.tenant_id).where(Event.id == event_id, Event.deleted_at.is_(None)))
+    if not ev or not ev.sessions:
+        raise HTTPException(404, "Evento não encontrado.")
+    out = auto_book.run_sync(ev.id, force=True)
+    if out == "no_transcript":
+        raise HTTPException(409, "Não há transcrição suficiente neste evento para escrever a apostila.")
+    if out == "not_in_plan":
+        raise HTTPException(403, "Seu plano não inclui o documento pós-evento.")
+    if out == "unsupported_language":
+        raise HTTPException(409, "O idioma original deste evento ainda não é suportado no PDF.")
+    audit(db, action="doc.auto_generate", actor_id=ctx.user.id, tenant_id=ctx.tenant_id, target=str(ev.id), ip=ctx.ip)
+    return {"result": out}
 
 
 @router.get("/events/{event_id}")
@@ -159,8 +178,9 @@ def approve(doc_id: UUID, body: ApproveIn, ctx: Ctx = Depends(require_admin), db
     if any(not f.get("reviewed") for f in d.flags):
         raise HTTPException(409, "Revise todas as referências sinalizadas antes de aprovar.")
     t, ev = db.get(Tenant, ctx.tenant_id), db.get(Event, d.event_id)
-    d.pdf_key = render_pdf(str(d.id), str(ctx.tenant_id), d.title, f"{ev.presenter} · {ev.theme}".strip(" ·"), t.name,
-                           d.content, (t.branding or {}).get("primary_color", "#0B63CE"))
+    d.pdf_key = render_book(str(d.id), str(ctx.tenant_id), d.title, f"{ev.presenter} · {ev.theme}".strip(" ·"), t.name, d.content,
+                            primary_color=(t.branding or {}).get("primary_color", "#0B63CE"), lang=d.language,
+                            date_str=fmt_date(ev.starts_at, d.language))
     d.status = DocStatus.APPROVED
     db.add(PublicationApproval(tenant_id=ctx.tenant_id, document_id=d.id, approved_by=ctx.user.id, note=body.note))
     db.commit()
