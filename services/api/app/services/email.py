@@ -32,6 +32,7 @@ def email_configured() -> bool:
 def send_email(to: str, subject: str, html_body: str, text_body: str) -> tuple[bool, str]:
     """Envia 1 e-mail. Retorna (ok, detalhe_para_log_sem_segredos)."""
     if not email_configured():
+        log.warning("resend: NÃO configurado (falta a chave, o e-mail remetente ou está desativado no painel)")
         return False, "resend_not_configured"
     try:
         r = httpx.post(
@@ -43,7 +44,11 @@ def send_email(to: str, subject: str, html_body: str, text_body: str) -> tuple[b
         log.warning("resend: falha de rede")
         return False, "network_error"
     if r.status_code >= 300:
-        log.warning("resend: HTTP %s", r.status_code)  # sem corpo/chave
+        try:   # a mensagem de erro do Resend (ex.: "domínio não verificado") ajuda a achar o problema; não contém segredos
+            why = str((r.json() or {}).get("message", ""))[:200]
+        except ValueError:
+            why = ""
+        log.warning("resend: HTTP %s %s", r.status_code, why)
         return False, f"http_{r.status_code}"
     return True, "sent"
 
