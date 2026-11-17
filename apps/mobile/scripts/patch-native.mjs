@@ -33,6 +33,12 @@ if (alvo === "android") {
   editar("android/app/build.gradle", (s) =>
     s.replace(/versionCode\s+\d+/, `versionCode ${parseInt(build, 10)}`).replace(/versionName\s+"[^"]*"/, `versionName "${versao}"`),
   );
+  // Android 7.0 (API 24) é o mínimo: a "proteção automática" do Google Play (Play Integrity) recusa pacotes com minSdk menor.
+  editar("android/variables.gradle", (s) =>
+    s.replace(/minSdkVersion\s*=\s*\d+/, "minSdkVersion = 24")
+      // O Google Play exige apps novos com target API 36 (Android 16). O compileSdk fica no que o Capacitor 7 suporta.
+      .replace(/targetSdkVersion\s*=\s*\d+/, "targetSdkVersion = 36"),
+  );
   // ASSINATURA: o Codemagic entrega a chave de envio nas variáveis CM_KEYSTORE_*. A chave NUNCA fica no repositório.
   if (process.env.CM_KEYSTORE_PATH) {
     editar("android/app/build.gradle", (s) => {
