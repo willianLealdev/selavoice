@@ -40,7 +40,7 @@ export default function AppHome() {
           <button className="btn btn-primary btn-lg" style={{ width: "100%" }} onClick={() => setScan(true)}><Icon name="qr" /> {t("Escanear QR Code")}</button>
           <form onSubmit={open} className="code-row">
             <input aria-label={t("Código do evento")} placeholder={t("Código do evento")} value={code} onChange={(e) => { setCode(e.target.value); setErr(""); }} autoCapitalize="none" autoCorrect="off" />
-            <button className="btn btn-ghost">{t("Entrar")}</button>
+            <button className="btn btn-ghost">{t("Abrir")}</button>
           </form>
           {err && <div className="err" style={{ margin: "10px 0 0" }}>{t(err)}</div>}
           <Link className="btn btn-ghost" style={{ width: "100%", marginTop: 10 }} href="/buscar"><Icon name="search" /> {t("Buscar organização pelo nome")}</Link>

@@ -1,11 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
 import { PwaRegister } from "@/components/InstallApp";
 import { LangProvider } from "@/lib/i18n";
 import "./globals.css";
 
-// Inter é servida pelo próprio site (next/font baixa na compilação): sem chamadas a terceiros no navegador do usuário.
-const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-inter", display: "swap" });
+// Fonte Inter em arquivos ESTÁTICOS de peso fixo (400/500/600/700), servidos pelo próprio site (@fontsource/inter): sem chamadas a
+// terceiros no navegador e SEM fonte "variável" — alguns Safari/WebKit ignoram o eixo de peso da variável e desenham todo o texto
+// no peso mais fino (tudo fica "apagado"). Fontes estáticas aparecem igual em qualquer versão do Safari.
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-700.css";
+import "@fontsource/inter/latin-ext-400.css";
+import "@fontsource/inter/latin-ext-600.css";
+import "@fontsource/inter/latin-ext-700.css";
 
 export const metadata: Metadata = {
   title: "SelaVoice — Real-time translation · Tradução em tempo real · Traducción en tiempo real",
@@ -25,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={inter.variable}>
+    <html lang="pt-BR">
       <body><PwaRegister /><LangProvider>{children}</LangProvider></body>
     </html>
   );

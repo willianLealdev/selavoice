@@ -4,6 +4,7 @@
  * Revisão por falante nativo recomendada antes de produção (traduções feitas por IA).
  */
 export const DICT: Record<string, [string, string]> = {
+  "Idioma da tela": ["Screen language", "Idioma de la pantalla"],
   "Defina o que uma organização nova recebe ao criar a conta. Você decide tudo aqui.": ["Define what a new organization gets when creating an account. You decide everything here.", "Defina qué recibe una organización nueva al crear la cuenta. Usted decide todo aquí."],
   "Configuração do teste": ["Trial settings", "Configuración de la prueba"],
   "Vale para as contas criadas DEPOIS de salvar. Quem já recebeu um teste continua com o que recebeu.": ["Applies to accounts created AFTER saving. Those who already got a trial keep what they got.", "Vale para las cuentas creadas DESPUÉS de guardar. Quienes ya recibieron una prueba conservan lo que recibieron."],

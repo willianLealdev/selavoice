@@ -34,7 +34,7 @@ export default function AdminLogin() {
     <div className="auth-wrap">
       {!setup ? (
         <form className="auth-card" onSubmit={submit}>
-          <div className="row spread"><BackButton fallback="/" /><LangSwitch /></div><img src="/logo.webp" alt="SelaVoice" style={{ height: 36, width: "auto", display: "block", margin: "20px 0 16px" }} /><h2>Super Admin</h2>
+          <div className="row spread"><BackButton fallback="/" always /><LangSwitch /></div><img src="/logo.webp" alt="SelaVoice" style={{ height: 36, width: "auto", display: "block", margin: "20px 0 16px" }} /><h2>Super Admin</h2>
           <label>{t("E-mail")}</label><input type="email" required value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           <label>{t("Senha")}</label><input type="password" required value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
           <label>{t("Código MFA (6 dígitos)")}</label><input inputMode="numeric" value={f.totp_code} onChange={(e) => setF({ ...f, totp_code: e.target.value })} placeholder={t("Deixe vazio só no 1º acesso")} />

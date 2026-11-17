@@ -220,7 +220,6 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
             <div className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
               <button className="chip on-dark-chip" onClick={() => setAbout(true)} aria-haspopup="dialog"><Icon name="building" small /> <span>{t("Sobre")}</span></button>
               <LanguagePicker languages={langs} value={lang} onChange={pick} />
-              <LangSwitch />
             </div>
           </div>
           <div className="l-meta">
@@ -247,6 +246,7 @@ export default function Listen({ params }: { params: Promise<{ code: string }> }
               {info.contact && Object.keys(info.contact).filter((k) => k !== "links").length > 0
                 ? <OrgContact contact={info.contact} />
                 : <p className="muted" style={{ margin: 0 }}>{t("A organização ainda não preencheu os dados públicos.")}</p>}
+              <div className="row" style={{ marginTop: 16, gap: 10 }}><span className="fine">{t("Idioma da tela")}</span><LangSwitch /></div>
               {info.organization_slug && <a className="btn btn-primary btn-sm" style={{ marginTop: 16 }} href={`/o/${info.organization_slug}`}>{t("Ver todos os eventos")} <Icon name="arrow" small /></a>}
             </div>
           </div>

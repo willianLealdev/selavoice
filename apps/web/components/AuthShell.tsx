@@ -23,7 +23,7 @@ export default function AuthShell({ title, subtitle, children }: { title: string
         <span className="fine" style={{ color: "#7f8da6" }}>© {new Date().getFullYear()} SelaVoice</span>
       </aside>
       <main className="auth-main">
-        <div className="auth-top" style={{ justifyContent: "space-between" }}><BackButton fallback="/" /><LangSwitch /></div>
+        <div className="auth-top" style={{ justifyContent: "space-between" }}><BackButton fallback="/" always /><LangSwitch /></div>
         <div className="auth-card">
           <Link href="/"><img className="brand-m" src="/logo.webp" alt="SelaVoice" /></Link>
           <h1>{title}</h1>

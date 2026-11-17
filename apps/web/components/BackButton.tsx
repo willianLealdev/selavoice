@@ -8,10 +8,14 @@ import { useRouter } from "next/navigation";
 import Icon from "./Icon";
 import { useT } from "@/lib/i18n";
 
-export default function BackButton({ fallback = "/", label, className = "" }: { fallback?: string; label?: string; className?: string }) {
+/**
+ * `always`: SEMPRE vai para `fallback` (usado nas telas de entrada: login, cadastro, esqueci a senha...). Nelas "voltar pelo histórico" não
+ * funciona direito: depois de sair da conta o histórico volta ao painel, que manda de novo para o login, e o botão parecia "não ir a lugar nenhum".
+ */
+export default function BackButton({ fallback = "/", label, className = "", always = false }: { fallback?: string; label?: string; className?: string; always?: boolean }) {
   const t = useT();
   const router = useRouter();
-  const go = () => (typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push(fallback));
+  const go = () => (!always && typeof window !== "undefined" && window.history.length > 1 ? router.back() : router.push(fallback));
   return (
     <button type="button" className={`back ${className}`} onClick={go} aria-label={label ?? t("Voltar")}>
       <Icon name="back" small /> <span>{label ?? t("Voltar")}</span>
